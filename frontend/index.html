@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Marketplace SaaS Integration Tester</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a1a; }
+  header { background: #232f3e; color: white; padding: 16px 32px; }
+  header h1 { font-size: 18px; font-weight: 500; }
+  header p { font-size: 13px; color: #aaa; margin-top: 4px; }
+  .tabs { display: flex; background: #1a242f; padding: 0 32px; }
+  .tab { padding: 12px 20px; font-size: 14px; color: #aaa; cursor: pointer; border-bottom: 3px solid transparent; }
+  .tab.active { color: #ff9900; border-bottom-color: #ff9900; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .container { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+  .card { background: white; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #232f3e; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: #444; }
+  .hint { font-size: 12px; color: #888; margin-bottom: 8px; margin-top: -2px; }
+  input, select { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; margin-bottom: 14px; }
+  input:focus, select:focus { outline: none; border-color: #ff9900; box-shadow: 0 0 0 2px rgba(255,153,0,0.2); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  button.primary { background: #ff9900; color: white; border: none; padding: 10px 24px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.primary:hover { background: #e68a00; }
+  button.primary:disabled { background: #ccc; cursor: not-allowed; }
+  .step { border: 1px solid #e0e0e0; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 12px; }
+  .step.pass { border-color: #1d8348; background: #f0faf4; }
+  .step.fail { border-color: #c0392b; background: #fdf3f2; }
+  .step.pending { border-color: #d5d8dc; background: #fafafa; }
+  .step.running { border-color: #2980b9; background: #eaf4fb; }
+  .step.skipped { border-color: #d5d8dc; background: #fafafa; opacity: 0.6; }
+  .step.warning { border-color: #d68910; background: #fef9e7; }
+  .badge { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+  .pass .badge { background: #1d8348; color: white; }
+  .fail .badge { background: #c0392b; color: white; }
+  .pending .badge, .skipped .badge { background: #bdc3c7; color: white; }
+  .running .badge { background: #2980b9; color: white; }
+  .warning .badge { background: #d68910; color: white; }
+  .step-content h3 { font-size: 14px; font-weight: 600; }
+  .step-content p { font-size: 13px; color: #555; margin-top: 4px; }
+  .step-content pre { font-size: 12px; background: #f4f4f4; padding: 8px; border-radius: 4px; margin-top: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .hidden { display: none; }
+  .callout { background: #fff8e6; border: 1px solid #f0c040; border-radius: 6px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; line-height: 1.6; }
+  .callout strong { display: block; margin-bottom: 4px; }
+  .callout ol { padding-left: 18px; }
+  .callout li { margin-bottom: 2px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #tokenPreview { font-size: 12px; color: #1d8348; margin-top: -10px; margin-bottom: 12px; min-height: 18px; }
+  .score-hero { text-align: center; padding: 24px 0 16px; }
+  .score-circle { width: 100px; height: 100px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; color: white; margin-bottom: 8px; }
+  .score-circle.high { background: #1d8348; }
+  .score-circle.mid { background: #d68910; }
+  .score-circle.low { background: #c0392b; }
+  .score-label { font-size: 13px; color: #666; }
+  .score-bars { margin-top: 16px; }
+  .score-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px; }
+  .score-bar-label { width: 160px; flex-shrink: 0; color: #444; }
+  .score-bar-track { flex: 1; background: #eee; border-radius: 4px; height: 10px; }
+  .score-bar-fill { height: 10px; border-radius: 4px; transition: width 0.5s; }
+  .score-bar-fill.high { background: #1d8348; }
+  .score-bar-fill.mid { background: #d68910; }
+  .score-bar-fill.low { background: #c0392b; }
+  .score-bar-pct { width: 36px; text-align: right; color: #666; flex-shrink: 0; }
+  .tip-item { border-left: 3px solid #ff9900; padding: 10px 14px; margin-bottom: 10px; background: #fffaf0; border-radius: 0 4px 4px 0; font-size: 13px; }
+  .tip-item strong { display: block; margin-bottom: 2px; color: #232f3e; }
+  pre.example { font-size: 12px; background: #f4f4f4; border-left: 3px solid #ccc; padding: 8px 10px; margin-top: 8px; border-radius: 0 4px 4px 0; white-space: pre-wrap; font-family: inherit; color: #444; }
+  .rewrite-btn { font-size: 12px; background: none; border: 1px solid #ff9900; color: #ff9900; padding: 4px 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+  .rewrite-btn:hover { background: #fff8ee; }
+  .rewrite-output { font-size: 13px; background: #f0faf4; border: 1px solid #1d8348; border-radius: 4px; padding: 10px; margin-top: 8px; white-space: pre-wrap; }
+  .rewrite-copy { font-size: 12px; background: none; border: 1px solid #1d8348; color: #1d8348; padding: 3px 8px; border-radius: 4px; cursor: pointer; margin-top: 6px; }
+  .tip-check { width: 16px; height: 16px; margin-right: 8px; cursor: pointer; flex-shrink: 0; margin-top: 2px; }
+  .tip-item.done { opacity: 0.5; text-decoration: line-through; }
+  .ammp-link { font-size: 12px; color: #0073bb; text-decoration: none; margin-left: 8px; }
+  .ammp-link:hover { text-decoration: underline; }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
+  .toolbar button { font-size: 13px; background: white; border: 1px solid #ccc; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
+  .toolbar button:hover { border-color: #ff9900; color: #ff9900; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AWS Marketplace — SaaS Integration Tester</h1>
+  <p>Validate your listing integrations before MCO review</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('integration')">Integration Tests</div>
+  <div class="tab" onclick="switchTab('scorer')">Listing Effectiveness</div>
+</div>
+
+<!-- Integration Tests Tab -->
+<div id="tab-integration" class="tab-content active">
+<div class="container">
+
+  <div class="card">
+    <h2>Marketplace Listing Integration Test</h2>
+    <div class="callout">
+      <strong>Before you start — subscribe to your own listing:</strong>
+      <ol>
+        <li>Go to your listing on AWS Marketplace (use a test buyer account)</li>
+        <li>On your listing page, click <b>Subscribe</b></li>
+        <li>After subscribing, you'll be redirected to your registration page URL</li>
+        <li>Copy the full URL from your browser's address bar and paste it below</li>
+      </ol>
+    </div>
+
+    <label>API Endpoint <span style="font-weight:400;color:#888">(from CloudFormation output)</span></label>
+    <input type="url" id="apiEndpoint" placeholder="https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/test" />
+
+    <label>Product Code</label>
+    <input type="text" id="productCode" placeholder="e.g. abc1defghij2kl3mno4pqrst5" onblur="detectListingType()" />
+    <div id="detectResult" style="font-size:12px;margin:-10px 0 14px;min-height:16px"></div>
+
+    <label>Full Registration Redirect URL</label>
+    <p class="hint">The complete URL your browser landed on after subscribing — includes the marketplace token as a query parameter</p>
+    <input type="text" id="redirectUrl" placeholder="https://yourapp.com/register?x-amzn-marketplace-token=eyJ..." oninput="extractToken()" />
+    <div id="tokenPreview"></div>
+
+    <label>Listing Type</label>
+    <select id="listingType" onchange="toggleMeteringFields()">
+      <option value="metering">Usage-Based Pricing (Metering)</option>
+      <option value="entitlement">Contract-Based Pricing</option>
+      <option value="both">Contract with Consumption (Metering)</option>
+    </select>
+
+    <div id="meteringFields" class="hidden">
+      <div class="row">
+        <div>
+          <label>Metering Dimension</label>
+          <input type="text" id="meteringDimension" placeholder="e.g. users, api_calls" />
+        </div>
+        <div>
+          <label>Test Quantity</label>
+          <input type="number" id="meteringQuantity" value="1" min="1" />
+        </div>
+      </div>
+    </div>
+
+    <button class="primary" id="runBtn" onclick="runTests()">Run Integration Tests</button>
+  </div>
+
+  <div class="card hidden" id="resultsCard">
+    <h2>Test Results</h2>
+    <div id="results"></div>
+  </div>
+
+</div>
+</div>
+
+<!-- Listing Effectiveness Tab -->
+<div id="tab-scorer" class="tab-content">
+<div class="container">
+  <div class="card">
+    <h2>Listing Effectiveness Scorer</h2>
+    <p class="hint" style="margin-bottom:16px">Enter your listing's Product ID to get an effectiveness score with SEO and product-led growth recommendations. Find your Entity ID in the AWS Partner Central under your listing details.</p>
+    <label>API Endpoint <span style="font-weight:400;color:#888">(from CloudFormation output)</span></label>
+    <input type="url" id="apiEndpoint2" placeholder="https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/test" />
+    <label>Product ID</label>
+    <input type="text" id="entityId" placeholder="e.g. prod-xxxxxxxxxxxxxx" />
+    <button class="primary" id="scoreBtn" onclick="scoreListing()">Score My Listing</button>
+  </div>
+  <div class="card hidden" id="scoreResults"></div>
+</div>
+</div>
+
+<script>
+const STEPS = {
+  registration_page: "Registration Page",
+  resolve_customer: "ResolveCustomer",
+  get_entitlements: "GetEntitlements",
+  meter_usage: "BatchMeterUsage",
+  concurrent_agreements: "Concurrent Agreements",
+  eventbridge: "EventBridge Integration",
+};
+
+const STEP_DESC = {
+  registration_page: "Buyers are redirected here after subscribing. MCO verifies your page loads correctly and accepts the marketplace token.",
+  resolve_customer: "Your backend must exchange the marketplace token for a customer identifier immediately when a buyer lands on your registration page.",
+  get_entitlements: "Verifies the buyer has an active entitlement for your product. Required for contract-based listings to confirm access rights.",
+  meter_usage: "Validates your backend can submit usage records to AWS Marketplace for billing. Required for all metering-based listings.",
+  concurrent_agreements: "Allows buyers to purchase your product multiple times within the same AWS account. Required for all new SaaS products from June 1, 2026.",
+  eventbridge: "AWS Marketplace sends subscription lifecycle events (subscribe, unsubscribe, entitlement changes) via EventBridge. Replaces SNS for new listings.",
+};
+
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("active", ["integration","scorer"][i] === name));
+  document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+}
+
+function extractToken() {
+  const val = document.getElementById("redirectUrl").value.trim();
+  const preview = document.getElementById("tokenPreview");
+  try {
+    const url = new URL(val);
+    const token = url.searchParams.get("x-amzn-marketplace-token");
+    preview.textContent = token ? `✓ Token found: ${token.substring(0, 40)}...` : (val ? "⚠ No x-amzn-marketplace-token found in URL" : "");
+  } catch { preview.textContent = val ? "⚠ Not a valid URL" : ""; }
+}
+
+function getTokenFromUrl() {
+  try { return new URL(document.getElementById("redirectUrl").value.trim()).searchParams.get("x-amzn-marketplace-token"); }
+  catch { return null; }
+}
+
+function getRegistrationBaseUrl() {
+  try { const u = new URL(document.getElementById("redirectUrl").value.trim()); return `${u.origin}${u.pathname}`; }
+  catch { return document.getElementById("redirectUrl").value.trim(); }
+}
+
+function toggleMeteringFields() {
+  document.getElementById("meteringFields").classList.toggle("hidden", document.getElementById("listingType").value === "entitlement");
+}
+
+function getStepsToRun() {
+  const type = document.getElementById("listingType").value;
+  const steps = ["registration_page", "resolve_customer"];
+  if (type !== "metering") steps.push("get_entitlements");
+  if (type === "metering" || type === "both") steps.push("meter_usage");
+  steps.push("concurrent_agreements", "eventbridge");
+  return steps;
+}
+
+function renderStep(id, state, title, detail, data) {
+  const icons = { pass: "✓", fail: "✗", pending: "·", running: "", skipped: "–", warning: "!" };
+  const spinner = state === "running" ? '<span class="spinner"></span>' : icons[state];
+  const desc = STEP_DESC[id] ? `<p class="desc" style="font-size:12px;color:#888;margin-top:2px;margin-bottom:4px">${STEP_DESC[id]}</p>` : "";
+  return `<div class="step ${state}" id="step-${id}">
+    <div class="badge">${spinner}</div>
+    <div class="step-content">
+      <h3>${title}</h3>
+      ${desc}
+      ${detail ? `<p class="status">${detail}</p>` : ""}
+      ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ""}
+    </div>
+  </div>`;
+}
+
+function updateStep(id, state, detail, data) {
+  const el = document.getElementById(`step-${id}`);
+  if (!el) return;
+  el.className = `step ${state}`;
+  const icons = { pass: "✓", fail: "✗", pending: "·", running: "", skipped: "–", warning: "!" };
+  el.querySelector(".badge").innerHTML = state === "running" ? '<span class="spinner"></span>' : icons[state];
+  const content = el.querySelector(".step-content");
+  let statusP = content.querySelector("p.status");
+  if (detail) {
+    if (statusP) { statusP.textContent = detail; }
+    else { content.insertAdjacentHTML("beforeend", `<p class="status">${detail}</p>`); }
+  }
+  if (data) {
+    const pre = content.querySelector("pre");
+    const html = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+    pre ? pre.outerHTML = html : content.insertAdjacentHTML("beforeend", html);
+  }
+}
+
+async function callApi(endpoint, action, payload) {
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  return resp.json();
+}
+
+async function detectListingType() {
+  const endpoint = document.getElementById("apiEndpoint").value.trim();
+  const productCode = document.getElementById("productCode").value.trim();
+  const resultEl = document.getElementById("detectResult");
+  if (!endpoint || !productCode) { resultEl.textContent = "⚠ Enter API Endpoint and Product Code first."; return; }
+
+  resultEl.textContent = "Detecting...";
+  try {
+    const result = await callApi(endpoint, "detect_listing_type", { product_code: productCode });
+    if (!result.pass) { resultEl.style.color = "#c0392b"; resultEl.textContent = `⚠ ${result.error}`; return; }
+
+    const labels = { entitlement: "Contract-Based Pricing", metering: "Usage-Based Pricing", both: "Contract with Consumption" };
+    document.getElementById("listingType").value = result.listing_type;
+    toggleMeteringFields();
+    resultEl.style.color = "#1d8348";
+    resultEl.textContent = `✓ Detected: ${labels[result.listing_type]}`;
+
+    // Auto-fill entity ID in scorer tab if detected
+    if (result.entity_id) document.getElementById("entityId").value = result.entity_id;
+  } catch(e) {
+    resultEl.style.color = "#c0392b";
+    resultEl.textContent = `⚠ Request failed: ${e.message}`;
+  }
+}
+
+async function runTests() {
+  const endpoint = document.getElementById("apiEndpoint").value.trim();
+  const productCode = document.getElementById("productCode").value.trim();
+  const redirectUrl = document.getElementById("redirectUrl").value.trim();
+  const token = getTokenFromUrl();
+  const registrationUrl = getRegistrationBaseUrl();
+  const dimension = document.getElementById("meteringDimension").value.trim();
+  const quantity = document.getElementById("meteringQuantity").value;
+
+  if (!endpoint || !productCode || !redirectUrl) { alert("Please fill in API Endpoint, Product Code, and the Registration Redirect URL."); return; }
+  if (!token) { alert("Could not find x-amzn-marketplace-token in the redirect URL."); return; }
+
+  const steps = getStepsToRun();
+  const btn = document.getElementById("runBtn");
+  btn.disabled = true; btn.textContent = "Running...";
+
+  const resultsCard = document.getElementById("resultsCard");
+  const resultsEl = document.getElementById("results");
+  resultsCard.classList.remove("hidden");
+  resultsEl.innerHTML = steps.map(s => renderStep(s, "pending", STEPS[s], "Waiting...")).join("");
+  resultsCard.scrollIntoView({ behavior: "smooth" });
+  let customerIdentifier = null;
+
+  for (const step of steps) {
+    updateStep(step, "running", "Running...");
+    try {
+      let result;
+      if (step === "registration_page") {
+        result = await callApi(endpoint, "check_registration_page", { registration_page_url: registrationUrl, registration_token: token });
+        updateStep(step, result.pass ? "pass" : "fail", result.note || result.error, { status_code: result.status_code, final_url: result.final_url });
+
+      } else if (step === "resolve_customer") {
+        result = await callApi(endpoint, "resolve_customer", { registration_token: token });
+        if (result.pass) customerIdentifier = result.customer_identifier;
+        updateStep(step, result.pass ? "pass" : "fail", result.pass ? "Customer identifier resolved successfully" : result.error,
+          result.pass ? { customer_identifier: result.customer_identifier, product_code: result.product_code } : null);
+
+      } else if (step === "get_entitlements") {
+        if (!customerIdentifier) { updateStep(step, "skipped", "Skipped — ResolveCustomer did not return a customer identifier"); continue; }
+        result = await callApi(endpoint, "get_entitlements", { product_code: productCode, customer_identifier: customerIdentifier, listing_type: document.getElementById("listingType").value });
+        updateStep(step, result.pass ? "pass" : "fail", result.pass ? `${result.entitlements.length} active entitlement(s) found` : result.error, result.debug || result.entitlements);
+
+      } else if (step === "meter_usage") {
+        if (!customerIdentifier) { updateStep(step, "skipped", "Skipped — ResolveCustomer did not return a customer identifier"); continue; }
+        if (!dimension) { updateStep(step, "skipped", "Skipped — no metering dimension provided"); continue; }
+        result = await callApi(endpoint, "meter_usage", { product_code: productCode, customer_identifier: customerIdentifier, dimension, quantity });
+        updateStep(step, result.pass ? "pass" : "fail", result.pass ? result.note : result.error, result.pass ? { metering_record_id: result.metering_record_id } : null);
+
+      } else if (step === "concurrent_agreements") {
+        const entityId = document.getElementById("entityId").value.trim();
+        if (!entityId) { updateStep(step, "skipped", "Skipped — enter your Product ID in the Listing Effectiveness tab to check Concurrent Agreements"); continue; }
+        result = await callApi(endpoint, "check_concurrent_agreements", { entity_id: entityId });
+        updateStep(step, result.pass ? "pass" : "fail", result.note || result.error, null);
+
+      } else if (step === "eventbridge") {
+        result = await callApi(endpoint, "check_eventbridge", {});
+        // EventBridge is a warning not a hard fail — SNS still works for existing listings
+        const ebState = result.pass ? "pass" : "warning";
+        updateStep(step, ebState, result.note || result.error,
+          result.pass ? { rules: result.rule_names } : null);
+        continue;
+      }
+    } catch (e) {
+      updateStep(step, "fail", `Request failed: ${e.message}`);
+    }
+  }
+
+  btn.disabled = false; btn.textContent = "Run Integration Tests";
+
+  // Summary — insert at top of results card
+  const allSteps = steps.map(s => document.getElementById(`step-${s}`));
+  const passed = allSteps.filter(el => el?.classList.contains("pass")).length;
+  const failed = allSteps.filter(el => el?.classList.contains("fail")).length;
+  const warned = allSteps.filter(el => el?.classList.contains("warning")).length;
+  const skipped = allSteps.filter(el => el?.classList.contains("skipped")).length;
+
+  const failMessages = {
+    registration_page: "Your registration page is not loading correctly. MCO will fail this check — ensure the page is publicly accessible via HTTPS and accepts the marketplace token parameter.",
+    resolve_customer: "ResolveCustomer failed. This is a critical MCO requirement — your backend must call this API with the token immediately after the buyer lands on your registration page.",
+    get_entitlements: "GetEntitlements returned no active entitlements. Verify your subscription is active in Partner Central and that you are calling the API from the seller account.",
+    meter_usage: "BatchMeterUsage failed. Verify your dimension name matches exactly what is defined in your listing and that your listing is in Limited or Live state.",
+    concurrent_agreements: "Concurrent Agreements is not enabled. This is required for all new SaaS products from June 1, 2026. Complete the integration and opt in via Partner Central.",
+    eventbridge: "No EventBridge rules found for AWS Marketplace events. SNS is being replaced by EventBridge — configure rules for aws.agreement-marketplace events to receive subscription notifications.",
+  };
+
+  const failedSteps = steps.filter(s => document.getElementById(`step-${s}`)?.classList.contains("fail"));
+  const failDetails = failedSteps.map(s => `<li>${failMessages[s] || s}</li>`).join("");
+
+  const allPassed = failed === 0;
+  const summaryColor = allPassed ? "#1d8348" : "#c0392b";
+  const summaryBg = allPassed ? "#f0faf4" : "#fdf3f2";
+  const summaryBorder = allPassed ? "#1d8348" : "#c0392b";
+
+  const summaryHtml = `
+    <div id="test-summary" style="border:1px solid ${summaryBorder};background:${summaryBg};border-radius:8px;padding:20px;margin-bottom:16px">
+      <h3 style="font-size:15px;font-weight:600;color:${summaryColor};margin-bottom:10px">
+        ${allPassed ? "✓ All tests passed — you're ready for MCO review" : `✗ ${failed} test${failed !== 1 ? "s" : ""} failed`}
+      </h3>
+      ${allPassed
+        ? `<p style="font-size:13px;color:#555;margin-bottom:14px">Your SaaS listing integration is working correctly. Follow these steps to request your listing goes live:</p>
+           <ol style="font-size:13px;color:#555;padding-left:18px;line-height:2">
+             <li>Go to the <a href="https://partnercentral.awspartner.com/partnercentral2/s/manage-products" target="_blank" style="color:#0073bb">AWS Partner Central</a> and open your listing</li>
+             <li>Verify all listing details are complete — title, description, highlights, pricing, and support information</li>
+             <li>Click <strong>Submit for review</strong> on your listing page</li>
+             <li>MCO will review your submission — typical turnaround is <strong>3–5 business days</strong></li>
+             <li>You will receive an email notification when your listing is approved or if changes are required</li>
+             <li>Once approved, your listing status will change from <strong>Limited</strong> to <strong>Live</strong></li>
+           </ol>
+           <p style="font-size:12px;color:#888;margin-top:12px">💡 Tip: Run the <strong>Listing Effectiveness</strong> tab before submitting to maximise your listing's discoverability and conversion rate.</p>`
+        : `<p style="font-size:13px;color:#555;margin-bottom:10px">Fix the following issues before submitting for MCO review:</p><ul style="font-size:13px;color:#555;padding-left:18px;line-height:1.8">${failDetails}</ul>`
+      }
+      ${skipped > 0 ? `<p style="font-size:12px;color:#888;margin-top:8px">${skipped} step${skipped !== 1 ? "s" : ""} skipped — see individual results above.</p>` : ""}
+    </div>`;
+
+  resultsEl.insertAdjacentHTML("afterbegin", summaryHtml);
+}
+
+async function scoreListing() {
+  const endpoint = document.getElementById("apiEndpoint2").value.trim();
+  const entityId = document.getElementById("entityId").value.trim();
+  if (!endpoint || !entityId) { alert("Please fill in the API Endpoint and Product ID."); return; }
+
+  const btn = document.getElementById("scoreBtn");
+  btn.disabled = true; btn.textContent = "Scoring...";
+
+  const resultsEl = document.getElementById("scoreResults");
+  resultsEl.classList.remove("hidden");
+  resultsEl.innerHTML = '<p style="color:#666;font-size:13px">Fetching listing data and running AI analysis...</p>';
+
+  try {
+    const result = await callApi(endpoint, "score_listing", { entity_id: entityId });
+    if (!result.pass) { resultsEl.innerHTML = `<p style="color:#c0392b">${result.error}</p>`; return; }
+
+    window._lastScoreResult = result;
+    window._lastEntityId = entityId;
+    window._lastEndpoint = endpoint;
+    renderScoreResults(result, entityId);
+  } catch(e) {
+    resultsEl.innerHTML = `<p style="color:#c0392b">Request failed: ${e.message}</p>`;
+  }
+
+  btn.disabled = false; btn.textContent = "Score My Listing";
+}
+
+function renderScoreResults(result, entityId) {
+  const s = result.overall_score;
+  const cls = s >= 75 ? "high" : s >= 50 ? "mid" : "low";
+  const label = s >= 75 ? "Good" : s >= 50 ? "Needs Work" : "Needs Attention";
+  const saved = JSON.parse(localStorage.getItem("mp-tester-done") || "[]");
+
+  const bars = result.scores.map(sc => {
+    const c = sc.score >= 75 ? "high" : sc.score >= 50 ? "mid" : "low";
+    return `<div class="score-bar-row">
+      <div class="score-bar-label">${sc.category}</div>
+      <div class="score-bar-track"><div class="score-bar-fill ${c}" style="width:${sc.score}%"></div></div>
+      <div class="score-bar-pct">${sc.score}%</div>
+    </div>`;
+  }).join("");
+
+  const ammpLinks = {
+    "Title": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Description": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Highlights": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "SEO / Keywords": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Search Keywords": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Media / Videos": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Free Trial": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Vendor Insights": "https://partnercentral.awspartner.com/partnercentral2/s/vendor-insights",
+    "Standard Contract (SCMP)": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Quick Launch": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Reviews (G2 / Peerspot)": "https://www.g2.com/",
+  };
+
+  const rewritableFields = { "Title": "title", "Short Description": "description", "Highlights": "highlights", "Long Description": "long_description", "Search Keywords": "keywords" };
+
+  const tips = result.tips.map((t, i) => {
+    const isDone = saved.includes(`${entityId}-${t.category}`);
+    const rewriteField = rewritableFields[t.category];
+    const ammpUrl = ammpLinks[t.category] || "https://partnercentral.awspartner.com/partnercentral2/s/manage-products";
+    return `<div class="tip-item ${isDone ? 'done' : ''}" id="tip-${i}">
+      <div style="display:flex;align-items:flex-start">
+        <input type="checkbox" class="tip-check" ${isDone ? 'checked' : ''} onchange="toggleDone('${entityId}','${t.category}',${i},this.checked)" />
+        <div style="flex:1">
+          <strong>${t.category} <a class="ammp-link" href="${ammpUrl}" target="_blank">Fix in AMMP →</a></strong>
+          ${t.tip}
+          ${t.example ? `<pre class="example">${t.example}</pre>` : ""}
+          ${rewriteField ? `<button class="rewrite-btn" onclick="rewriteField('${rewriteField}',${i})">✨ ${rewriteField === 'keywords' ? 'Suggest keywords' : 'Suggest rewrite'}</button><div id="rewrite-${i}"></div>` : ""}
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const resultsEl = document.getElementById("scoreResults");
+  resultsEl.innerHTML = `
+    <div class="score-hero">
+      <div class="score-circle ${cls}">${s}</div>
+      <div class="score-label">${result.product_title || entityId} — ${label}</div>
+    </div>
+    ${result.summary ? `<p style="font-size:14px;line-height:1.7;color:#333;margin:16px 0;padding:16px;background:#f8f9fa;border-radius:6px;border-left:4px solid #ff9900">${result.summary}</p>` : ""}
+    <div class="toolbar">
+      <button onclick="rescoreListing()">↻ Re-score</button>
+      <button onclick="exportReport()">⬇ Export report</button>
+      <button onclick="copyReport()">⎘ Copy to clipboard</button>
+    </div>
+    <div class="score-bars">${bars}</div>
+    ${tips ? `<h2 style="font-size:15px;font-weight:600;margin:20px 0 12px;color:#232f3e">Recommendations</h2>${tips}` : '<p style="color:#1d8348;font-size:13px;margin-top:16px">✓ No recommendations — your listing looks great!</p>'}
+  `;
+}
+
+function toggleDone(entityId, category, idx, checked) {
+  const key = "mp-tester-done";
+  const id = `${entityId}-${category}`;
+  let saved = JSON.parse(localStorage.getItem(key) || "[]");
+  saved = checked ? [...new Set([...saved, id])] : saved.filter(x => x !== id);
+  localStorage.setItem(key, JSON.stringify(saved));
+  document.getElementById(`tip-${idx}`).classList.toggle("done", checked);
+}
+
+async function rewriteField(field, tipIdx) {
+  const endpoint = window._lastEndpoint;
+  const result = window._lastScoreResult;
+  const container = document.getElementById(`rewrite-${tipIdx}`);
+  container.innerHTML = '<span style="font-size:12px;color:#666">Generating rewrite...</span>';
+
+  const context = `Title: ${result.product_title}`;
+  const currentMap = {
+    title: result.product_title || "",
+    description: result.short_description || "",
+    highlights: JSON.stringify(result.highlights || []),
+    long_description: result.long_description || "",
+    keywords: (result.keywords || []).join(", "),
+  };
+
+  try {
+    const r = await callApi(endpoint, "rewrite_field", { field, current: currentMap[field] || "", context });
+    if (!r.pass) { container.innerHTML = `<p style="color:#c0392b;font-size:12px">${r.error}</p>`; return; }
+    container.innerHTML = `<div class="rewrite-output">${r.rewrite}</div>
+      <button class="rewrite-copy" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);this.textContent='Copied!'">Copy</button>`;
+  } catch(e) {
+    container.innerHTML = `<p style="color:#c0392b;font-size:12px">Failed: ${e.message}</p>`;
+  }
+}
+
+async function rescoreListing() {
+  document.getElementById("scoreResults").innerHTML = '<p style="color:#666;font-size:13px">Re-scoring...</p>';
+  const endpoint = window._lastEndpoint;
+  const entityId = window._lastEntityId;
+  try {
+    const result = await callApi(endpoint, "score_listing", { entity_id: entityId });
+    window._lastScoreResult = result;
+    renderScoreResults(result, entityId);
+  } catch(e) {
+    document.getElementById("scoreResults").innerHTML = `<p style="color:#c0392b">Failed: ${e.message}</p>`;
+  }
+}
+
+function exportReport() {
+  const result = window._lastScoreResult;
+  if (!result) return;
+  const lines = [
+    `AWS Marketplace Listing Effectiveness Report`,
+    `Product: ${result.product_title}`,
+    `Overall Score: ${result.overall_score}%`,
+    ``,
+    result.summary || "",
+    ``,
+    `SCORES`,
+    ...result.scores.map(s => `${s.category}: ${s.score}%`),
+    ``,
+    `RECOMMENDATIONS`,
+    ...result.tips.map(t => `[${t.category}]\n${t.tip}${t.example ? '\n' + t.example : ''}`),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `mp-listing-report-${result.product_title?.replace(/\s+/g,"-") || "report"}.txt`;
+  a.click();
+}
+
+function copyReport() {
+  const result = window._lastScoreResult;
+  if (!result) return;
+  const lines = [
+    `AWS Marketplace Listing Effectiveness Report`,
+    `Product: ${result.product_title} | Score: ${result.overall_score}%`,
+    ``,
+    result.summary || "",
+    ``,
+    ...result.scores.map(s => `${s.category}: ${s.score}%`),
+    ``,
+    ...result.tips.map(t => `• ${t.category}: ${t.tip}`),
+  ];
+  navigator.clipboard.writeText(lines.join("\n")).then(() => {
+    const btn = event.target;
+    btn.textContent = "✓ Copied!";
+    setTimeout(() => btn.textContent = "⎘ Copy to clipboard", 2000);
+  });
+}
+</script>
+</body>
+</html>
