@@ -1,76 +1,74 @@
 # AWS Marketplace Seller Readiness Tool
 
-A self-service tool for AWS Marketplace sellers to validate their SaaS listing integrations and listing effectiveness before MCO review.
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
 
-## What it does
+A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and listing effectiveness before MCO (Marketplace Channel Operations) review. Deploys into the seller's own AWS account via CloudFormation.
 
-### Tab 1 — Integration Tests
-Runs end-to-end integration checks against your live Limited listing:
+## Features
+
+### Integration Tests
+Validates all required SaaS integrations against a live Limited listing:
 
 | Test | Description |
 |------|-------------|
-| Registration Page | Verifies your page loads and accepts the marketplace token |
-| ResolveCustomer | Validates token exchange returns a customer identifier |
-| GetEntitlements | Confirms active entitlements (contract-based listings) |
-| BatchMeterUsage | Validates usage records can be submitted (metering listings) |
-| Concurrent Agreements | Checks if enabled (required for new listings from June 1, 2026) |
-| EventBridge Integration | Checks if EventBridge rules exist for subscription events |
+| Registration Page | Page loads and accepts the marketplace token |
+| ResolveCustomer | Token exchange returns a valid customer identifier |
+| GetEntitlements | Active entitlements exist (contract-based listings) |
+| BatchMeterUsage | Usage records can be submitted (metering listings) |
+| Concurrent Agreements | Enabled on listing (required for new listings from June 1, 2026) |
+| EventBridge | Rules configured for subscription lifecycle events |
 
-### Tab 2 — Listing Effectiveness Scorer
-AI-powered scoring of your listing content across 15+ categories:
-- Title, Short Description, Highlights, Long Description
-- SEO / Search Keywords, Categories, Media
-- Product-Led Growth: Free Trial, PAYG Pricing, Contract Pricing
-- Procurement: Vendor Insights, SCMP, Quick Launch
-- Social Proof: G2/Peerspot Reviews
+### Listing Effectiveness Scorer
+AI-powered scoring across 15+ categories with Amazon Bedrock (Claude):
+- Discoverability — title, keywords, highlights
+- Evaluation — media, reviews, long description
+- Pricing — free trial, PAYG, contract pricing
+- Procurement — Vendor Insights, SCMP, Quick Launch
+- AI-generated executive summary and rewrite suggestions per field
 
-Features:
-- AI-generated executive summary (Amazon Bedrock / Claude)
-- AI rewrite suggestions for each underperforming field
-- Export report as text file
-- Copy report to clipboard
-- Progress tracker (checkboxes persist in localStorage)
-- Direct links to fix each item in AWS Partner Central
+## Architecture
 
-## Prerequisites
+```
+Browser (CloudFront)
+    │  HTTP POST
+    ▼
+API Gateway → Lambda (Python 3.12)
+                 ├── AWS Marketplace Catalog API
+                 ├── Marketplace Metering/Entitlement APIs
+                 ├── Amazon Bedrock (Claude 3 Haiku)
+                 └── Amazon EventBridge
+```
 
-- AWS CLI configured with credentials for the seller account
-- A SaaS listing in **Limited** state in AWS Partner Central
-- Subscribed to your own listing at least once (to get a registration token)
+All API calls run within the seller's own AWS account. No credentials leave their environment.
 
 ## Deploy
+
+### Prerequisites
+- AWS CLI configured
+- Python 3 and pip3
+
+### One command deploy
 
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
-Deploys to your AWS account:
-- Lambda function (Python 3.12)
-- API Gateway (HTTP API)
+Creates:
+- Lambda function + API Gateway
 - S3 bucket + CloudFront distribution (frontend)
-- IAM role with Marketplace, Bedrock, and EventBridge permissions
+- IAM role with least-privilege Marketplace, Bedrock, and EventBridge permissions
 
-Prints the **TestToolUrl** when complete — open that URL in your browser.
+Prints the **TestToolUrl** on completion — open it in your browser.
 
-## Getting your registration token
+## Usage
 
-1. Go to your listing on [AWS Marketplace](https://aws.amazon.com/marketplace)
-2. Subscribe using a test buyer account
-3. Click **Set Up Your Account** — your browser redirects to your registration page with a token:
-   ```
-   https://yourapp.com/register?x-amzn-marketplace-token=eyJ...
-   ```
-4. Copy the full URL and paste it into the tool
-
-## Publish for workshop use
-
-```bash
-export MP_ASSETS_BUCKET=your-team-bucket-name
-./publish.sh
-```
-
-Uploads assets to S3 and generates a Launch Stack URL for the workshop lab.
+1. Subscribe to your own Limited listing to get a registration token
+2. Open the TestToolUrl
+3. Enter your Product Code — listing type is auto-detected
+4. Paste the full registration redirect URL (includes the marketplace token)
+5. Click **Run Integration Tests**
+6. Switch to **Listing Effectiveness** tab, enter your Product ID, click **Score My Listing**
 
 ## Cleanup
 
@@ -78,23 +76,29 @@ Uploads assets to S3 and generates a Launch Stack URL for the workshop lab.
 aws cloudformation delete-stack --stack-name mp-saas-tester
 ```
 
-## Project structure
+## Project Structure
 
 ```
-mp-seller-readiness-tool/
-  backend/
-    handler.py          Lambda function — all API actions
-    requirements.txt    Python dependencies (requests)
-  frontend/
-    index.html          Single-page web UI
-  infra/
-    template.yaml       CloudFormation template
-  workshop/
-    content/            Workshop lab markdown content
-  build.sh              Build and deploy script
-  serve.sh              Local frontend server (dev only)
-  publish.sh            Publish assets to S3 for workshop
-  README.md             This file
-  ARCHITECTURE.md       Code walkthrough and technical details
-  DESCRIPTION.md        Product description and problem statement
+├── backend/
+│   ├── handler.py        Lambda function
+│   └── requirements.txt
+├── frontend/
+│   └── index.html        Single-page UI (no build step)
+├── infra/
+│   └── template.yaml     CloudFormation template
+├── build.sh              Build and deploy
+├── serve.sh              Local dev server
+├── publish.sh            Publish assets to S3 for workshop distribution
+├── ARCHITECTURE.md       Technical walkthrough
+└── DESCRIPTION.md        Problem statement and product description
 ```
+
+## Security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+
+This tool deploys resources into your AWS account. Review the IAM permissions in `infra/template.yaml` before deploying.
+
+## License
+
+This project is licensed under the Apache 2.0 License — see [LICENSE](LICENSE).
