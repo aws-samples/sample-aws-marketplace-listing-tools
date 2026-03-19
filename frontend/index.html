@@ -110,7 +110,8 @@
     </div>
 
     <label>API Endpoint <span style="font-weight:400;color:#888">(from CloudFormation output)</span></label>
-    <input type="url" id="apiEndpoint" placeholder="https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/test" />
+    <input type="url" id="apiEndpoint" placeholder="https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/test" value="__API_ENDPOINT__" />
+    <div id="apiEndpointHint" style="font-size:12px;color:#1d8348;margin:-10px 0 14px;display:none">✓ API endpoint configured automatically</div>
 
     <label>Product Code</label>
     <input type="text" id="productCode" placeholder="e.g. abc1defghij2kl3mno4pqrst5" onblur="detectListingType()" />
@@ -159,7 +160,8 @@
     <h2>Listing Effectiveness Scorer</h2>
     <p class="hint" style="margin-bottom:16px">Enter your listing's Product ID to get an effectiveness score with SEO and product-led growth recommendations. Find your Entity ID in the AWS Partner Central under your listing details.</p>
     <label>API Endpoint <span style="font-weight:400;color:#888">(from CloudFormation output)</span></label>
-    <input type="url" id="apiEndpoint2" placeholder="https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/test" />
+    <input type="url" id="apiEndpoint2" placeholder="https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/test" value="__API_ENDPOINT__" />
+    <div id="apiEndpoint2Hint" style="font-size:12px;color:#1d8348;margin:-10px 0 14px;display:none">✓ API endpoint configured automatically</div>
     <label>Product ID</label>
     <input type="text" id="entityId" placeholder="e.g. prod-xxxxxxxxxxxxxx" />
     <button class="primary" id="scoreBtn" onclick="scoreListing()">Score My Listing</button>
@@ -179,13 +181,26 @@ const STEPS = {
 };
 
 const STEP_DESC = {
-  registration_page: "Buyers are redirected here after subscribing. MCO verifies your page loads correctly and accepts the marketplace token.",
-  resolve_customer: "Your backend must exchange the marketplace token for a customer identifier immediately when a buyer lands on your registration page.",
-  get_entitlements: "Verifies the buyer has an active entitlement for your product. Required for contract-based listings to confirm access rights.",
-  meter_usage: "Validates your backend can submit usage records to AWS Marketplace for billing. Required for all metering-based listings.",
-  concurrent_agreements: "Allows buyers to purchase your product multiple times within the same AWS account. Required for all new SaaS products from June 1, 2026.",
-  eventbridge: "AWS Marketplace sends subscription lifecycle events (subscribe, unsubscribe, entitlement changes) via EventBridge. Replaces SNS for new listings.",
+  registration_page: "Buyers are redirected here after subscribing. MCO verifies your page loads correctly and accepts the marketplace token. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html' target='_blank' style='color:#0073bb'>Docs →</a>",
+  resolve_customer: "Your backend must exchange the marketplace token for a customer identifier immediately when a buyer lands on your registration page. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html#saas-resolve-customer' target='_blank' style='color:#0073bb'>Docs →</a>",
+  get_entitlements: "Verifies the buyer has an active entitlement for your product. Required for contract-based listings to confirm access rights. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-contract.html' target='_blank' style='color:#0073bb'>Docs →</a>",
+  meter_usage: "Validates your backend can submit usage records to AWS Marketplace for billing. Required for all metering-based listings. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-metering.html' target='_blank' style='color:#0073bb'>Docs →</a>",
+  concurrent_agreements: "Allows buyers to purchase your product multiple times within the same AWS account. Required for all new SaaS products from June 1, 2026. <a href='https://catalog.workshops.aws/mpseller/en-US/saas/integration-for-concurrent-agreements' target='_blank' style='color:#0073bb'>Integration lab →</a>",
+  eventbridge: "AWS Marketplace sends subscription lifecycle events via EventBridge. Replaces SNS for new listings. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-eventbridge-integration.html' target='_blank' style='color:#0073bb'>Docs →</a>",
 };
+
+// Hide API endpoint fields if pre-configured via CloudFormation
+window.addEventListener("DOMContentLoaded", () => {
+  ["apiEndpoint", "apiEndpoint2"].forEach(id => {
+    const el = document.getElementById(id);
+    const hint = document.getElementById(id + "Hint");
+    if (el && el.value && el.value.startsWith("https://") && !el.value.includes("xxxxxxxxxx")) {
+      el.previousElementSibling.style.display = "none";
+      el.style.display = "none";
+      if (hint) hint.style.display = "block";
+    }
+  });
+});
 
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("active", ["integration","scorer"][i] === name));
@@ -371,12 +386,12 @@ async function runTests() {
   const skipped = allSteps.filter(el => el?.classList.contains("skipped")).length;
 
   const failMessages = {
-    registration_page: "Your registration page is not loading correctly. MCO will fail this check — ensure the page is publicly accessible via HTTPS and accepts the marketplace token parameter.",
-    resolve_customer: "ResolveCustomer failed. This is a critical MCO requirement — your backend must call this API with the token immediately after the buyer lands on your registration page.",
-    get_entitlements: "GetEntitlements returned no active entitlements. Verify your subscription is active in Partner Central and that you are calling the API from the seller account.",
-    meter_usage: "BatchMeterUsage failed. Verify your dimension name matches exactly what is defined in your listing and that your listing is in Limited or Live state.",
-    concurrent_agreements: "Concurrent Agreements is not enabled. This is required for all new SaaS products from June 1, 2026. Complete the integration and opt in via Partner Central.",
-    eventbridge: "No EventBridge rules found for AWS Marketplace events. SNS is being replaced by EventBridge — configure rules for aws.agreement-marketplace events to receive subscription notifications.",
+    registration_page: "Your registration page is not loading correctly. MCO will fail this check — ensure the page is publicly accessible via HTTPS and accepts the marketplace token parameter. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html' target='_blank'>See docs →</a>",
+    resolve_customer: "ResolveCustomer failed. This is a critical MCO requirement — your backend must call this API with the token immediately after the buyer lands on your registration page. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html#saas-resolve-customer' target='_blank'>See docs →</a>",
+    get_entitlements: "GetEntitlements returned no active entitlements. Verify your subscription is active in Partner Central and that you are calling the API from the seller account. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-contract.html' target='_blank'>See docs →</a>",
+    meter_usage: "BatchMeterUsage failed. Verify your dimension name matches exactly what is defined in your listing and that your listing is in Limited or Live state. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-metering.html' target='_blank'>See docs →</a>",
+    concurrent_agreements: "Concurrent Agreements is not enabled. This is required for all new SaaS products from June 1, 2026. Complete the integration and opt in via Partner Central. <a href='https://catalog.workshops.aws/mpseller/en-US/saas/integration-for-concurrent-agreements' target='_blank'>Integration lab →</a>",
+    eventbridge: "No EventBridge rules found for AWS Marketplace events. SNS is being replaced by EventBridge — configure rules for aws.agreement-marketplace events to receive subscription notifications. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-eventbridge-integration.html' target='_blank'>See docs →</a>",
   };
 
   const failedSteps = steps.filter(s => document.getElementById(`step-${s}`)?.classList.contains("fail"));
