@@ -331,6 +331,7 @@ async function runTests() {
   resultsEl.innerHTML = steps.map(s => renderStep(s, "pending", STEPS[s], "Waiting...")).join("");
   resultsCard.scrollIntoView({ behavior: "smooth" });
   let customerIdentifier = null;
+  let customerAWSAccountId = null;
 
   for (const step of steps) {
     updateStep(step, "running", "Running...");
@@ -342,9 +343,12 @@ async function runTests() {
 
       } else if (step === "resolve_customer") {
         result = await callApi(endpoint, "resolve_customer", { registration_token: token });
-        if (result.pass) customerIdentifier = result.customer_identifier;
-        updateStep(step, result.pass ? "pass" : "fail", result.pass ? "Customer identifier resolved successfully" : result.error,
-          result.pass ? { customer_identifier: result.customer_identifier, product_code: result.product_code } : null);
+        if (result.pass) {
+          customerIdentifier = result.customer_identifier;
+          customerAWSAccountId = result.customer_aws_account_id;
+        }
+        updateStep(step, result.pass ? "pass" : "fail", result.pass ? "Customer resolved successfully" : result.error,
+          result.pass ? { customer_identifier: result.customer_identifier, customer_aws_account_id: result.customer_aws_account_id, product_code: result.product_code } : null);
 
       } else if (step === "get_entitlements") {
         if (!customerIdentifier) { updateStep(step, "skipped", "Skipped — ResolveCustomer did not return a customer identifier"); continue; }
@@ -354,7 +358,7 @@ async function runTests() {
       } else if (step === "meter_usage") {
         if (!customerIdentifier) { updateStep(step, "skipped", "Skipped — ResolveCustomer did not return a customer identifier"); continue; }
         if (!dimension) { updateStep(step, "skipped", "Skipped — no metering dimension provided"); continue; }
-        result = await callApi(endpoint, "meter_usage", { product_code: productCode, customer_identifier: customerIdentifier, dimension, quantity });
+        result = await callApi(endpoint, "meter_usage", { product_code: productCode, customer_identifier: customerIdentifier, customer_aws_account_id: customerAWSAccountId, dimension, quantity });
         updateStep(step, result.pass ? "pass" : "fail", result.pass ? result.note : result.error, result.pass ? { metering_record_id: result.metering_record_id } : null);
 
       } else if (step === "concurrent_agreements") {
@@ -410,7 +414,7 @@ async function runTests() {
       ${allPassed
         ? `<p style="font-size:13px;color:#555;margin-bottom:14px">Your SaaS listing integration is working correctly. Follow these steps to request your listing goes live:</p>
            <ol style="font-size:13px;color:#555;padding-left:18px;line-height:2">
-             <li>Go to the <a href="https://partnercentral.awspartner.com/partnercentral2/s/manage-products" target="_blank" style="color:#0073bb">AWS Partner Central</a> and open your listing</li>
+             <li>Go to the <a href="https://us-east-1.console.aws.amazon.com/partnercentral/dashboard" target="_blank" style="color:#0073bb">AWS Partner Central</a> and open your listing</li>
              <li>Verify all listing details are complete — title, description, highlights, pricing, and support information</li>
              <li>Click <strong>Submit for review</strong> on your listing page</li>
              <li>MCO will review your submission — typical turnaround is <strong>3–5 business days</strong></li>
@@ -469,16 +473,16 @@ function renderScoreResults(result, entityId) {
   }).join("");
 
   const ammpLinks = {
-    "Title": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
-    "Description": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
-    "Highlights": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
-    "SEO / Keywords": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
-    "Search Keywords": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
-    "Media / Videos": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
-    "Free Trial": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Title": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "Description": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "Highlights": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "SEO / Keywords": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "Search Keywords": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "Media / Videos": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "Free Trial": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
     "Vendor Insights": "https://partnercentral.awspartner.com/partnercentral2/s/vendor-insights",
-    "Standard Contract (SCMP)": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
-    "Quick Launch": "https://partnercentral.awspartner.com/partnercentral2/s/manage-products",
+    "Standard Contract (SCMP)": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "Quick Launch": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
     "Reviews (G2 / Peerspot)": "https://www.g2.com/",
   };
 
@@ -487,7 +491,7 @@ function renderScoreResults(result, entityId) {
   const tips = result.tips.map((t, i) => {
     const isDone = saved.includes(`${entityId}-${t.category}`);
     const rewriteField = rewritableFields[t.category];
-    const ammpUrl = ammpLinks[t.category] || "https://partnercentral.awspartner.com/partnercentral2/s/manage-products";
+    const ammpUrl = ammpLinks[t.category] || "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard";
     return `<div class="tip-item ${isDone ? 'done' : ''}" id="tip-${i}">
       <div style="display:flex;align-items:flex-start">
         <input type="checkbox" class="tip-check" ${isDone ? 'checked' : ''} onchange="toggleDone('${entityId}','${t.category}',${i},this.checked)" />

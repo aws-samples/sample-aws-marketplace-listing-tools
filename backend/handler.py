@@ -36,15 +36,14 @@ def resolve_customer(body):
     if not token:
         return {"pass": False, "error": "registration_token is required"}
 
-    client = boto3.client("marketplace-entitlement", region_name="us-east-1")
-    # ResolveCustomer is in marketplace-metering
     mp = boto3.client("meteringmarketplace", region_name="us-east-1")
     resp = mp.resolve_customer(RegistrationToken=token)
     return {
         "pass": True,
         "customer_identifier": resp.get("CustomerIdentifier"),
-        "product_code": resp.get("ProductCode"),
         "customer_aws_account_id": resp.get("CustomerAWSAccountId"),
+        "product_code": resp.get("ProductCode"),
+        "license_arn": resp.get("LicenseArn"),
     }
 
 
@@ -112,42 +111,42 @@ def get_entitlements(body):
 def meter_usage(body):
     product_code = body.get("product_code")
     customer_identifier = body.get("customer_identifier")
+    customer_aws_account_id = body.get("customer_aws_account_id")
     dimension = body.get("dimension")
     quantity = int(body.get("quantity", 1))
 
-    if not all([product_code, customer_identifier, dimension]):
-        return {"pass": False, "error": "product_code, customer_identifier, and dimension are required"}
+    if not all([product_code, dimension]):
+        return {"pass": False, "error": "product_code and dimension are required"}
 
     import datetime
     mp = boto3.client("meteringmarketplace", region_name="us-east-1")
+
+    usage_record = {
+        "Timestamp": datetime.datetime.utcnow(),
+        "Dimension": dimension,
+        "Quantity": quantity,
+    }
+    # CustomerAWSAccountId is preferred; fall back to CustomerIdentifier
+    if customer_aws_account_id:
+        usage_record["CustomerAWSAccountId"] = customer_aws_account_id
+    elif customer_identifier:
+        usage_record["CustomerIdentifier"] = customer_identifier
+    else:
+        return {"pass": False, "error": "customer_aws_account_id or customer_identifier is required"}
+
     resp = mp.batch_meter_usage(
         ProductCode=product_code,
-        UsageRecords=[
-            {
-                "Timestamp": datetime.datetime.utcnow(),
-                "CustomerIdentifier": customer_identifier,
-                "Dimension": dimension,
-                "Quantity": quantity,
-            }
-        ],
+        UsageRecords=[usage_record],
     )
     results = resp.get("Results", [])
     unprocessed = resp.get("UnprocessedRecords", [])
 
     if unprocessed:
-        return {
-            "pass": False,
-            "error": f"Record was not processed: {unprocessed[0].get('MeteringRecordId', 'unknown')}",
-        }
+        return {"pass": False, "error": f"Record was not processed: {unprocessed[0].get('MeteringRecordId', 'unknown')}"}
 
     status = results[0].get("Status") if results else None
-    # DuplicateRecord means metering is working — same record can't be submitted twice in an hour
     if status == "DuplicateRecord":
-        return {
-            "pass": True,
-            "status": status,
-            "note": "Metering integration is working correctly. DuplicateRecord indicates a record was already submitted for this hour — this is expected when testing more than once.",
-        }
+        return {"pass": True, "status": status, "note": "Metering integration is working correctly. DuplicateRecord indicates a record was already submitted for this hour — this is expected when testing more than once."}
     return {
         "pass": status == "Success",
         "status": status,
