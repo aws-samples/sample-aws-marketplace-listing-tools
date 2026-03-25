@@ -290,46 +290,67 @@ def rewrite_field(body):
     current = body.get("current", "")
     context = body.get("context", "")  # other listing fields for context
 
+    GUIDELINES = """Official AWS Marketplace guidelines:
+- Title: Use title case, buyer must identify product by name alone, use brand name, avoid hyperbole, max ~80 chars
+- Short Description: Max 350 characters, avoid unnecessary capitalisation/punctuation, no redirects to other platforms, benefit-focused, no hyperbole
+- Highlights: Up to 3 bullet points, describe primary selling points, specific and benefit-driven, avoid generic phrases
+- Keywords: Up to 3 keywords/phrases, max 250 chars total, use buyer vocabulary, don't duplicate title
+- Long Description: Include features, benefits, usage, specific use cases, integration ecosystem, customer outcomes
+PLG best practices: Free trial + PAYG = 3x higher conversion; 30% of traffic from search engines; listings with media have 3x higher pricing engagement"""
+
     prompts = {
-        "title": f"""Rewrite this AWS Marketplace product listing title to be more effective.
+        "title": f"""Rewrite this AWS Marketplace product listing title to comply with official guidelines.
+
+{GUIDELINES}
+
 Current title: {current}
 Product context: {context}
 
 Requirements:
-- Use title case
-- Clearly describe what the product does (not just the brand name)
-- Include the product category or primary use case
-- Be specific and searchable (avoid generic words like "Solution", "Platform", "Product")
+- Use title case (capitalise first letter of each important word)
+- Buyer must be able to identify the product by name alone
+- Use the brand or manufacturer name
+- Avoid hyperbole and generic words like "Solution", "Platform", "Product", "Test", "AnyCompany"
 - Maximum 80 characters
 
 Respond with ONLY the rewritten title, nothing else.""",
 
-        "description": f"""Rewrite this AWS Marketplace short description to be more effective.
+        "description": f"""Rewrite this AWS Marketplace short description to comply with official guidelines.
+
+{GUIDELINES}
+
 Current description: {current}
 Product context: {context}
 
 Requirements:
-- Lead with the problem solved or value delivered (not "We are..." or "Our product...")
-- Be specific with outcomes, not vague benefits
 - Maximum 350 characters
-- No unnecessary punctuation or capitalisation
+- Avoid unnecessary capitalisation and punctuation
+- Do not redirect to other platforms or include upsell language
+- Lead with the problem solved or value delivered (not "We are..." or "Our product...")
+- No hyperbole — include only critical, useful information
 
 Respond with ONLY the rewritten description, nothing else.""",
 
-        "highlights": f"""Rewrite these AWS Marketplace product highlights to be more effective.
+        "highlights": f"""Rewrite these AWS Marketplace product highlights to comply with official guidelines.
+
+{GUIDELINES}
+
 Current highlights: {current}
 Product context: {context}
 
 Requirements:
 - Provide exactly 3 bullet points
-- Each highlight must be specific with a metric or concrete outcome
+- Each highlight must briefly describe a primary selling point
+- Be specific with metrics or concrete outcomes
 - Avoid generic phrases like "Easy to use", "Scalable", "Reliable", "Powerful"
-- Each highlight should cover a distinct value: e.g. cost savings, time savings, risk reduction
 - Maximum 150 characters each
 
 Respond with ONLY 3 bullet points, one per line, no numbering or dashes.""",
 
-        "long_description": f"""Rewrite this AWS Marketplace long description to be more effective.
+        "long_description": f"""Rewrite this AWS Marketplace long description to comply with official guidelines.
+
+{GUIDELINES}
+
 Current description: {current}
 Product context: {context}
 
@@ -337,18 +358,23 @@ Requirements:
 - Lead with the problem solved or value delivered
 - Include: key use cases, target personas, integration ecosystem, compliance certifications, customer outcomes with metrics
 - Structure clearly: Overview → Use Cases → Key Features → Why Choose Us
-- Minimum 300 characters, no upper limit
+- Minimum 300 characters
 - Use plain text, no markdown or HTML
+- Do not redirect to other platforms or include upsell language
 
 Respond with ONLY the rewritten long description, nothing else.""",
 
-        "keywords": f"""Suggest 3 search keywords for this AWS Marketplace product listing.
+        "keywords": f"""Suggest 3 search keywords for this AWS Marketplace product listing, following official guidelines.
+
+{GUIDELINES}
+
 Product context: {context}
+Current keywords: {current}
 
 Requirements:
-- Use terms buyers actually search for (not the product or company name)
+- Use terms buyers actually search for — not the product or company name (already indexed separately)
 - Be specific to the product category and use case
-- Choose from buyer vocabulary — words they use when looking for this type of product
+- Choose from buyer vocabulary
 - Each keyword can be a single word or short phrase (max 3 words)
 - Total must be under 250 characters combined
 
@@ -459,15 +485,61 @@ def score_listing(body):
     # ── AI quality assessment (title, description, highlights) ───────────────
     ai_scores = {}
     ai_feedback = {}
+
+    AWS_MP_GUIDELINES = """
+AWS MARKETPLACE OFFICIAL LISTING GUIDELINES:
+
+TITLE GUIDELINES:
+- Use title case (capitalise first letter of each important word)
+- Ensure a buyer can identify the product by the name alone
+- Use the name of the brand or manufacturer
+- Avoid descriptive data or hyperbole
+- GovCloud products must include "GovCloud" in the title
+- Supported characters: ASCII 0-126, ©, ®, ™, currency symbols
+
+DESCRIPTION GUIDELINES (max 350 characters):
+- Avoid unnecessary capitalisation
+- Avoid unnecessary punctuation marks
+- Do not include redirect information to other platforms
+- Check spelling and grammar
+- Include only critical, useful information
+- Avoid descriptive data and hyperbole
+- Must not contain language redirecting users to other cloud platforms or upsell services
+
+HIGHLIGHTS GUIDELINES (up to 3 bullet points):
+- Briefly describe the product's primary selling points
+- Each highlight should be specific and benefit-driven
+- Avoid generic phrases
+
+SEARCH RANKING FIELDS (in order of importance):
+Product title, Vendor name, Keywords, Highlights, Short description, Long description
+
+PLG BEST PRACTICES (from AWS Marketplace field data):
+- 30% of AWS Marketplace traffic comes from search engines
+- 60% of search queries result in a click on the first page of results
+- 95% of SEO traffic lands on product listings
+- 20% of customers engage with videos on listing pages
+- Customers value specific use cases — engagement with pricing is 3x higher on listings with rich media
+- 25% of customers say free trials are essential before purchase
+- Free trial to PAYG conversion is 3x higher than free trial to contract only
+- Customers spend 3-6 months researching and browse 3-5 listing pages before buying
+- Vendor Insights reduces procurement delays of 8-10 weeks caused by security reviews
+- SCMP can accelerate sales cycles by up to 80% vs custom EULA
+"""
+
     try:
         bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
-        prompt = f"""You are evaluating an AWS Marketplace SaaS listing for quality and effectiveness.
+        prompt = f"""You are an AWS Marketplace listing quality evaluator. Score each field against the official AWS Marketplace guidelines and PLG best practices provided below.
 
-Score each of the following fields from 0-100 and provide one specific improvement tip with a concrete example.
+{AWS_MP_GUIDELINES}
+
+Now evaluate this listing:
 
 Product Title: {title or "(empty)"}
 Short Description: {desc or "(empty)"}
 Highlights: {json.dumps(highlights) if highlights else "(empty)"}
+
+Score each field 0-100 based on how well it meets the official guidelines above. Provide one specific improvement tip and a concrete example for each.
 
 Respond ONLY with valid JSON in this exact format:
 {{
@@ -477,9 +549,9 @@ Respond ONLY with valid JSON in this exact format:
 }}
 
 Scoring criteria:
-- Title: Does it clearly describe what the product does (not just the brand name)? Is it specific and searchable? Penalise generic words like "Solution", "Platform", "Product", "Test", "AnyCompany".
-- Description: Does it lead with buyer value (not "We are...")? Is it specific, benefit-focused, under 350 chars?
-- Highlights: Are all 3 present? Are they specific with metrics/outcomes? Penalise generic phrases like "Easy to use", "Scalable", "Reliable"."""
+- Title: Does it follow AWS title case guidelines? Can a buyer identify the product by name alone? Is it specific and searchable? Penalise generic words like "Solution", "Platform", "Product", "Test", "AnyCompany".
+- Description: Does it meet the 350 character limit? Does it avoid unnecessary capitalisation and hyperbole? Does it lead with buyer value rather than company self-promotion? Does it avoid redirecting to other platforms?
+- Highlights: Are all 3 present? Are they specific with metrics or concrete outcomes? Do they describe primary selling points? Penalise generic phrases like "Easy to use", "Scalable", "Reliable"."""
 
         resp = bedrock.invoke_model(
             modelId="anthropic.claude-3-haiku-20240307-v1:0",
@@ -621,7 +693,9 @@ Scoring criteria:
         bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
         score_summary = "\n".join(f"- {s['category']}: {s['score']}%" for s in scores)
         tip_summary = "\n".join(f"- {t['category']}: {t['tip']}" for t in tips[:6])
-        summary_prompt = f"""You are an AWS Marketplace listing advisor. Write a 3-4 sentence executive summary for a seller based on their listing effectiveness scores.
+        summary_prompt = f"""You are an AWS Marketplace listing advisor. Write a 3-4 sentence executive summary for a seller based on their listing effectiveness scores, benchmarked against official AWS Marketplace guidelines and PLG best practices.
+
+{AWS_MP_GUIDELINES}
 
 Overall score: {overall}%
 
@@ -632,8 +706,8 @@ Top recommendations:
 {tip_summary}
 
 Write a concise, actionable summary that:
-1. States the overall listing health in one sentence
-2. Identifies the 2-3 highest priority areas to fix
+1. States the overall listing health relative to AWS Marketplace best practices in one sentence
+2. Identifies the 2-3 highest priority areas to fix, referencing specific guidelines where relevant
 3. Ends with one specific next action they should take today
 
 Be direct and specific. Do not use bullet points. Do not mention AWS Marketplace by name repeatedly."""
