@@ -1,4 +1,4 @@
-# AWS Marketplace Seller Readiness Tool
+# AWS Marketplace SaaS Integration Tester
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
 
@@ -11,64 +11,122 @@ Validates all required SaaS integrations against a live Limited listing:
 
 | Test | Description |
 |------|-------------|
-| Registration Page | Page loads and accepts the marketplace token |
+| Registration Page (POST) | Page accepts POST with marketplace token in form body |
 | ResolveCustomer | Token exchange returns a valid customer identifier |
+| ResolveCustomer Causality | Verifies your registration page triggers a ResolveCustomer call via CloudTrail |
+| ResolveCustomer History | Checks CloudTrail for ResolveCustomer calls from your application in the last 7 days |
+| Error Handling | Sends an invalid token to verify graceful error handling (no stack traces) |
 | GetEntitlements | Active entitlements exist (contract-based listings) |
 | BatchMeterUsage | Usage records can be submitted (metering listings) |
-| Concurrent Agreements | Enabled on listing (required for new listings from June 1, 2026) |
-| EventBridge | Rules configured for subscription lifecycle events |
+| Metering History | Checks CloudTrail for BatchMeterUsage calls from your application |
+| Listing Completeness | Required listing fields are present (logo, support, categories, media) |
+| Notification Endpoint | EventBridge rules or SNS subscription configured for lifecycle events |
+| Concurrent Agreements | Enabled on listing (required for new SaaS products from June 1, 2026) |
+| EventBridge | Rules configured for aws.agreement-marketplace events |
 
 ### Listing Effectiveness Scorer
-AI-powered scoring across 15+ categories with Amazon Bedrock (Claude):
-- Discoverability — title, keywords, highlights
-- Evaluation — media, reviews, long description
-- Pricing — free trial, PAYG, contract pricing
-- Procurement — Vendor Insights, SCMP, Quick Launch
+AI-powered scoring across 12 weighted categories with Amazon Bedrock (Claude):
+- Content quality: Title, Short Description, Highlights (scored against a structured rubric with 4 bands)
+- Discoverability: Search Keywords, Title SEO, Categories
+- Media: Screenshots and videos
+- Pricing: Free Trial, Pay-As-You-Go, Contract Pricing
+- Support information completeness
+- Product-aware evaluation tailored to your listing's industry and audience
+- Per-highlight feedback identifying which bullet points need improvement
 - AI-generated executive summary and rewrite suggestions per field
 
 ## Architecture
 
 ```
 Browser (CloudFront)
-    │  HTTP POST
-    ▼
-API Gateway → Lambda (Python 3.12)
-                 ├── AWS Marketplace Catalog API
-                 ├── Marketplace Metering/Entitlement APIs
-                 ├── Amazon Bedrock (Claude 3 Haiku)
-                 └── Amazon EventBridge
+    |  HTTP POST
+    v
+API Gateway -> Lambda (Python 3.12)
+                 |-- AWS Marketplace Catalog API
+                 |-- Marketplace Metering/Entitlement APIs
+                 |-- Amazon Bedrock (Claude 3 Haiku)
+                 |-- Amazon EventBridge
+                 |-- AWS CloudTrail
 ```
 
 All API calls run within the seller's own AWS account. No credentials leave their environment.
 
 ## Deploy
 
-### Prerequisites
-- AWS CLI configured
-- Python 3 and pip3
+### Option 1: Launch Stack (recommended)
 
-### One command deploy
+Click the button below to deploy directly into your AWS account:
+
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?stackName=mp-saas-tester&templateURL=TEMPLATE_S3_URL)
+
+> Replace `TEMPLATE_S3_URL` with the hosted template URL when publishing.
+
+### Option 2: Deploy with AWS CLI
+
+1. Clone this repository
+2. Package the Lambda function:
 
 ```bash
-chmod +x build.sh
-./build.sh
+cd backend
+pip3 install -r requirements.txt -t package/
+cp handler.py package/
+cd package && zip -r ../function.zip . && cd ..
+rm -rf package
+cd ..
 ```
 
-Creates:
-- Lambda function + API Gateway
-- S3 bucket + CloudFront distribution (frontend)
-- IAM role with least-privilege Marketplace, Bedrock, and EventBridge permissions
+3. Deploy the CloudFormation stack:
 
-Prints the **TestToolUrl** on completion — open it in your browser.
+```bash
+aws cloudformation deploy \
+  --template-file infra/template.yaml \
+  --stack-name mp-saas-tester \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+4. Update the Lambda function code:
+
+```bash
+aws lambda update-function-code \
+  --function-name mp-saas-tester \
+  --zip-file fileb://backend/function.zip
+```
+
+5. Get the stack outputs:
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name mp-saas-tester \
+  --query "Stacks[0].Outputs"
+```
+
+6. Upload the frontend with the API endpoint injected:
+
+```bash
+API_ENDPOINT=$(aws cloudformation describe-stacks \
+  --stack-name mp-saas-tester \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text)
+
+FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
+  --stack-name mp-saas-tester \
+  --query "Stacks[0].Outputs[?OutputKey=='FrontendBucket'].OutputValue" \
+  --output text)
+
+sed "s|__API_ENDPOINT__|$API_ENDPOINT|g" frontend/index.html > /tmp/index.html
+aws s3 cp /tmp/index.html s3://$FRONTEND_BUCKET/index.html --content-type text/html
+```
+
+7. Open the **TestToolUrl** from the stack outputs in your browser.
 
 ## Usage
 
-1. Subscribe to your own Limited listing to get a registration token
-2. Open the TestToolUrl
-3. Enter your Product Code — listing type is auto-detected
+1. Subscribe to your own Limited listing from a test buyer account
+2. Open the TestToolUrl from the CloudFormation stack outputs
+3. Enter your Product Code (listing type is auto-detected)
 4. Paste the full registration redirect URL (includes the marketplace token)
 5. Click **Run Integration Tests**
-6. Switch to **Listing Effectiveness** tab, enter your Product ID, click **Score My Listing**
+6. Switch to the **Listing Effectiveness** tab, enter your Product ID, click **Score My Listing**
 
 ## Cleanup
 
@@ -79,18 +137,17 @@ aws cloudformation delete-stack --stack-name mp-saas-tester
 ## Project Structure
 
 ```
-├── backend/
-│   ├── handler.py        Lambda function
-│   └── requirements.txt
-├── frontend/
-│   └── index.html        Single-page UI (no build step)
-├── infra/
-│   └── template.yaml     CloudFormation template
-├── build.sh              Build and deploy
-├── serve.sh              Local dev server
-├── publish.sh            Publish assets to S3 for workshop distribution
-├── ARCHITECTURE.md       Technical walkthrough
-└── DESCRIPTION.md        Problem statement and product description
+backend/
+  handler.py          Lambda function (integration tests + scorer)
+  requirements.txt    Python dependencies
+frontend/
+  index.html          Single-page UI (no build step)
+infra/
+  template.yaml       CloudFormation template (Lambda, API Gateway, S3, CloudFront, IAM)
+ARCHITECTURE.md       Technical walkthrough
+API_REFERENCE.md      API endpoint documentation
+DESCRIPTION.md        Problem statement and product description
+CONTRIBUTING.md       Contribution guidelines
 ```
 
 ## Security
@@ -101,4 +158,4 @@ This tool deploys resources into your AWS account. Review the IAM permissions in
 
 ## License
 
-This project is licensed under the Apache 2.0 License — see [LICENSE](LICENSE).
+This project is licensed under the Apache 2.0 License. See [LICENSE](LICENSE).
