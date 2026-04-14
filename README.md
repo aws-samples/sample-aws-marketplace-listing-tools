@@ -53,6 +53,17 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 
 ## Deploy
 
+### Prerequisites
+- AWS CLI configured with credentials for your AWS Marketplace seller account
+- Python 3 and pip3
+- Account registered as an [AWS Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
+- Amazon Bedrock model access enabled for **Claude 3 Haiku** in **us-east-1** (used by the Listing Effectiveness Scorer). Enable via the [Bedrock console](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
+- A SaaS listing in **Limited** state (required to run integration tests)
+
+> All resources deploy to **us-east-1**. AWS Marketplace APIs are only available in this region.
+
+### Steps
+
 1. Clone this repository
 2. Package the Lambda function:
 
