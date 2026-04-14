@@ -6,3 +6,6 @@ video-demo/
 .vscode/
 __pycache__/
 *.pyc
+build.sh
+publish.sh
+serve.sh
