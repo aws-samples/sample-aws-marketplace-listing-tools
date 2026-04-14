@@ -1,0 +1,8 @@
+.DS_Store
+backend/function.zip
+backend/package/
+video-demo/
+.kiro/
+.vscode/
+__pycache__/
+*.pyc
