@@ -89,8 +89,15 @@ aws cloudformation deploy \
 4. Update the Lambda function code:
 
 ```bash
+FUNCTION_NAME=$(aws cloudformation describe-stack-resource \
+  --stack-name aws-marketplace-seller-toolkit \
+  --logical-resource-id LambdaFunction \
+  --query "StackResourceDetail.PhysicalResourceId" \
+  --output text \
+  --region us-east-1)
+
 aws lambda update-function-code \
-  --function-name aws-marketplace-seller-toolkit \
+  --function-name $FUNCTION_NAME \
   --zip-file fileb://backend/function.zip \
   --region us-east-1
 ```

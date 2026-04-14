@@ -25,7 +25,6 @@ Resources:
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: aws-marketplace-seller-toolkit-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -62,7 +61,6 @@ Resources:
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: aws-marketplace-seller-toolkit
       Runtime: python3.12
       Handler: handler.lambda_handler
       Role: !GetAtt LambdaRole.Arn
@@ -128,7 +126,6 @@ Resources:
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "aws-marketplace-seller-toolkit-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -154,7 +151,7 @@ Resources:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: aws-marketplace-seller-toolkit-oac
+        Name: !Sub "${AWS::StackName}-oac"
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -181,7 +178,6 @@ Resources:
     Type: AWS::IAM::Role
     Condition: HasS3Assets
     Properties:
-      RoleName: aws-marketplace-seller-toolkit-frontend-deploy-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -209,7 +205,6 @@ Resources:
     Type: AWS::Lambda::Function
     Condition: HasS3Assets
     Properties:
-      FunctionName: aws-marketplace-seller-toolkit-frontend-deploy
       Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt FrontendDeployRole.Arn
