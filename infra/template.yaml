@@ -33,6 +33,8 @@ Resources:
                   - aws-marketplace:ListEntities
                   - bedrock:InvokeModel
                   - events:ListRules
+                  - cloudtrail:LookupEvents
+                  - sts:GetCallerIdentity
                 Resource: "*"
               - Effect: Allow
                 Action:
