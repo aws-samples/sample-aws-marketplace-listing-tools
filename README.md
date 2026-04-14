@@ -82,7 +82,8 @@ cd ..
 aws cloudformation deploy \
   --template-file infra/template.yaml \
   --stack-name aws-marketplace-seller-toolkit \
-  --capabilities CAPABILITY_NAMED_IAM
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
 ```
 
 4. Update the Lambda function code:
@@ -90,7 +91,8 @@ aws cloudformation deploy \
 ```bash
 aws lambda update-function-code \
   --function-name aws-marketplace-seller-toolkit \
-  --zip-file fileb://backend/function.zip
+  --zip-file fileb://backend/function.zip \
+  --region us-east-1
 ```
 
 5. Get the stack outputs:
@@ -98,7 +100,8 @@ aws lambda update-function-code \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name aws-marketplace-seller-toolkit \
-  --query "Stacks[0].Outputs"
+  --query "Stacks[0].Outputs" \
+  --region us-east-1
 ```
 
 6. Upload the frontend with the API endpoint injected:
@@ -107,15 +110,17 @@ aws cloudformation describe-stacks \
 API_ENDPOINT=$(aws cloudformation describe-stacks \
   --stack-name aws-marketplace-seller-toolkit \
   --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
-  --output text)
+  --output text \
+  --region us-east-1)
 
 FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
   --stack-name aws-marketplace-seller-toolkit \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendBucket'].OutputValue" \
-  --output text)
+  --output text \
+  --region us-east-1)
 
 sed "s|__API_ENDPOINT__|$API_ENDPOINT|g" frontend/index.html > /tmp/index.html
-aws s3 cp /tmp/index.html s3://$FRONTEND_BUCKET/index.html --content-type text/html
+aws s3 cp /tmp/index.html s3://$FRONTEND_BUCKET/index.html --content-type text/html --region us-east-1
 ```
 
 7. Open the **TestToolUrl** from the stack outputs in your browser.
@@ -132,7 +137,7 @@ aws s3 cp /tmp/index.html s3://$FRONTEND_BUCKET/index.html --content-type text/h
 ## Cleanup
 
 ```bash
-aws cloudformation delete-stack --stack-name aws-marketplace-seller-toolkit
+aws cloudformation delete-stack --stack-name aws-marketplace-seller-toolkit --region us-east-1
 ```
 
 ## Project Structure
