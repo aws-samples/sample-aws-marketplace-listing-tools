@@ -19,7 +19,6 @@ Validates all required SaaS integrations against a live Limited listing:
 | GetEntitlements | Active entitlements exist (contract-based listings) |
 | BatchMeterUsage | Usage records can be submitted (metering listings) |
 | Metering History | Checks CloudTrail for BatchMeterUsage calls from your application |
-| Listing Completeness | Required listing fields are present (logo, support, categories, media) |
 | Notification Endpoint | EventBridge rules or SNS subscription configured for lifecycle events |
 | Concurrent Agreements | Enabled on listing (required for new SaaS products from June 1, 2026) |
 | EventBridge | Rules configured for aws.agreement-marketplace events |

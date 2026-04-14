@@ -180,7 +180,6 @@ const STEPS = {
   get_entitlements: "GetEntitlements",
   meter_usage: "BatchMeterUsage",
   metering_history: "Metering History (CloudTrail)",
-  listing_completeness: "Listing Completeness",
   notification_endpoint: "Notification Endpoint",
   concurrent_agreements: "Concurrent Agreements",
   eventbridge: "EventBridge Integration",
@@ -195,7 +194,6 @@ const STEP_DESC = {
   get_entitlements: "Verifies the buyer has an active entitlement for your product. Required for contract-based listings to confirm access rights. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-contract.html' target='_blank' style='color:#0073bb'>Docs →</a>",
   meter_usage: "Validates your backend can submit usage records to AWS Marketplace for billing. Required for all metering-based listings. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-metering.html' target='_blank' style='color:#0073bb'>Docs →</a>",
   metering_history: "Checks CloudTrail for recent BatchMeterUsage calls from your application to confirm your backend is actively submitting usage records.",
-  listing_completeness: "Checks required listing fields are present: logo, registration URL, support information, categories, and media.",
   notification_endpoint: "Verifies your application has a configured endpoint to receive subscription lifecycle notifications via EventBridge or SNS.",
   concurrent_agreements: "Allows buyers to purchase your product multiple times within the same AWS account. Required for all new SaaS products from June 1, 2026. <a href='https://catalog.workshops.aws/mpseller/en-US/saas/integration-for-concurrent-agreements' target='_blank' style='color:#0073bb'>Integration lab →</a>",
   eventbridge: "AWS Marketplace sends subscription lifecycle events via EventBridge. Replaces SNS for new listings. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-eventbridge-integration.html' target='_blank' style='color:#0073bb'>Docs →</a>",
@@ -270,7 +268,7 @@ function getStepsToRun() {
   const steps = ["registration_page", "resolve_customer", "resolve_customer_causality", "resolve_customer_history", "registration_error_handling"];
   if (type !== "metering") steps.push("get_entitlements");
   if (type === "metering" || type === "both") steps.push("meter_usage", "metering_history");
-  steps.push("listing_completeness", "notification_endpoint", "concurrent_agreements", "eventbridge");
+  steps.push("notification_endpoint", "concurrent_agreements", "eventbridge");
   return steps;
 }
 
@@ -502,13 +500,6 @@ async function runTests() {
         }
         continue;
 
-      } else if (step === "listing_completeness") {
-        const entityId = document.getElementById("entityId").value.trim();
-        if (!entityId) { updateStep(step, "skipped", "Skipped — enter your Product ID in the Listing Effectiveness tab to check listing completeness"); continue; }
-        result = await callApi(endpoint, "check_listing_completeness", { entity_id: entityId });
-        updateStep(step, result.pass ? "pass" : "fail", result.note || result.error,
-          result.pass ? null : { issues: result.issues });
-
       } else if (step === "notification_endpoint") {
         result = await callApi(endpoint, "check_notification_endpoint", {});
         updateStep(step, result.pass ? "pass" : "warning", result.note || result.error,
@@ -551,7 +542,6 @@ async function runTests() {
     meter_usage: "BatchMeterUsage failed. Verify your dimension name matches exactly what is defined in your listing and that your listing is in Limited or Live state. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-metering.html' target='_blank'>See docs →</a>",
     concurrent_agreements: "Concurrent Agreements is not enabled. This is required for all new SaaS products from June 1, 2026. Complete the integration and opt in via Partner Central. <a href='https://catalog.workshops.aws/mpseller/en-US/saas/integration-for-concurrent-agreements' target='_blank'>Integration lab →</a>",
     eventbridge: "No EventBridge rules found for AWS Marketplace events. SNS is being replaced by EventBridge — configure rules for aws.agreement-marketplace events to receive subscription notifications. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-eventbridge-integration.html' target='_blank'>See docs →</a>",
-    listing_completeness: "Your listing is missing required fields. Fix the issues shown above before submitting for MCO review.",
   };
 
   const failedSteps = steps.filter(s => document.getElementById(`step-${s}`)?.classList.contains("fail"));
