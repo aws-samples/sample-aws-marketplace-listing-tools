@@ -176,7 +176,7 @@ const STEPS = {
   resolve_customer: "ResolveCustomer",
   resolve_customer_history: "ResolveCustomer History (CloudTrail)",
   registration_error_handling: "Error Handling (Invalid Token)",
-  get_entitlements: "GetEntitlements",
+  get_entitlements: "GetEntitlements (Guidance)",
   meter_usage: "BatchMeterUsage",
   metering_history: "Metering History (CloudTrail)",
   notification_endpoint: "Notification Endpoint",
@@ -189,7 +189,7 @@ const STEP_DESC = {
   resolve_customer: "Validates the token can be exchanged for a customer identifier using the Marketplace API.",
   resolve_customer_history: "Checks CloudTrail to confirm your application is calling ResolveCustomer when buyers land on your registration page.",
   registration_error_handling: "Sends an invalid token to your registration page to verify it handles errors gracefully without crashing or exposing stack traces.",
-  get_entitlements: "Verifies the buyer has an active entitlement for your product. Required for contract-based listings to confirm access rights. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-contract.html' target='_blank' style='color:#0073bb'>Docs →</a>",
+  get_entitlements: "Your backend must call GetEntitlements after ResolveCustomer to verify the buyer's subscription. MCO checks this via internal service logs that this tool cannot access. Ensure your registration page calls GetEntitlements and stores the entitlement data. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-contract.html' target='_blank' style='color:#0073bb'>Docs →</a>",
   meter_usage: "Validates your backend can submit usage records to AWS Marketplace for billing. Required for all metering-based listings. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-metering.html' target='_blank' style='color:#0073bb'>Docs →</a>",
   metering_history: "Checks CloudTrail for recent BatchMeterUsage calls from your application to confirm your backend is actively submitting usage records.",
   notification_endpoint: "Verifies your application has a configured endpoint to receive subscription lifecycle notifications via EventBridge or SNS.",
@@ -220,6 +220,13 @@ function showLang(btn, lang) {
 function showLang2(btn, lang) {
   document.getElementById("code-rc-python").style.display = lang === "python" ? "" : "none";
   document.getElementById("code-rc-nodejs").style.display = lang === "nodejs" ? "" : "none";
+  btn.parentElement.querySelectorAll("button").forEach(b => { b.style.background = "white"; b.style.color = "#333"; });
+  btn.style.background = "#ff9900"; btn.style.color = "white";
+}
+
+function showLangEnt(btn, lang) {
+  document.getElementById("code-ent-python").style.display = lang === "python" ? "" : "none";
+  document.getElementById("code-ent-nodejs").style.display = lang === "nodejs" ? "" : "none";
   btn.parentElement.querySelectorAll("button").forEach(b => { b.style.background = "white"; b.style.color = "#333"; });
   btn.style.background = "#ff9900"; btn.style.color = "white";
 }
@@ -436,9 +443,56 @@ async function runTests() {
             : { status_code: result.status_code, has_stack_trace: result.has_stack_trace, response_snippet: result.response_snippet, note: result.note });
 
       } else if (step === "get_entitlements") {
-        if (!customerIdentifier) { updateStep(step, "skipped", "Skipped — ResolveCustomer did not return a customer identifier"); continue; }
-        result = await callApi(endpoint, "get_entitlements", { product_code: productCode, customer_identifier: customerIdentifier, listing_type: document.getElementById("listingType").value });
-        updateStep(step, result.pass ? "pass" : "fail", result.pass ? `${result.entitlements.length} active entitlement(s) found` : result.error, result.debug || result.entitlements);
+        // Guidance-only step — do not call GetEntitlements (MCO checks this via internal logs)
+        const listingType = document.getElementById("listingType").value;
+        if (listingType === "metering") {
+          updateStep(step, "skipped", "Not applicable for metering-only listings.");
+          continue;
+        }
+        updateStep(step, "warning",
+          "Action required: your backend must call GetEntitlements after ResolveCustomer. MCO verifies this via internal service logs that this tool cannot access.",
+          null);
+        const el = document.getElementById(`step-get_entitlements`);
+        if (el) {
+          el.querySelector(".step-content").insertAdjacentHTML("beforeend", `
+            <div style="margin-top:10px">
+              <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#555">Your backend must implement this:</div>
+              <div style="display:flex;gap:8px;margin-bottom:6px">
+                <button onclick="showLangEnt(this,'python')" style="font-size:11px;padding:2px 8px;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:#ff9900;color:white">Python</button>
+                <button onclick="showLangEnt(this,'nodejs')" style="font-size:11px;padding:2px 8px;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:white;color:#333">Node.js</button>
+              </div>
+              <pre id="code-ent-python" style="font-size:11px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre">import boto3
+
+client = boto3.client('marketplace-entitlement', region_name='us-east-1')
+
+# Call this after ResolveCustomer returns the customer identifier
+response = client.get_entitlements(
+    ProductCode='YOUR_PRODUCT_CODE',
+    Filter={'CUSTOMER_IDENTIFIER': [customer_identifier]}
+)
+
+for entitlement in response['Entitlements']:
+    dimension = entitlement['Dimension']
+    value = entitlement['Value']
+    expiration = entitlement.get('ExpirationDate')
+    # Store entitlement data and provision access accordingly</pre>
+              <pre id="code-ent-nodejs" style="display:none;font-size:11px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre">const { MarketplaceEntitlementServiceClient, GetEntitlementsCommand } = require('@aws-sdk/client-marketplace-entitlement-service');
+
+const client = new MarketplaceEntitlementServiceClient({ region: 'us-east-1' });
+
+// Call this after ResolveCustomer returns the customer identifier
+const response = await client.send(new GetEntitlementsCommand({
+  ProductCode: 'YOUR_PRODUCT_CODE',
+  Filter: { CUSTOMER_IDENTIFIER: [customerIdentifier] }
+}));
+
+for (const entitlement of response.Entitlements) {
+  const { Dimension, Value, ExpirationDate } = entitlement;
+  // Store entitlement data and provision access accordingly
+}</pre>
+            </div>`);
+        }
+        continue;
 
       } else if (step === "meter_usage") {
         if (!customerIdentifier) { updateStep(step, "skipped", "Skipped — ResolveCustomer did not return a customer identifier"); continue; }
@@ -507,7 +561,6 @@ async function runTests() {
     registration_page: "Your registration page is not loading correctly. MCO will fail this check — ensure the page is publicly accessible via HTTPS and accepts the marketplace token parameter. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html' target='_blank'>See docs →</a>",
     resolve_customer: "ResolveCustomer failed. This is a critical MCO requirement — your backend must call this API with the token immediately after the buyer lands on your registration page. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html#saas-resolve-customer' target='_blank'>See docs →</a>",
     registration_error_handling: "Your registration page crashes or exposes error details when given an invalid token. Catch exceptions from ResolveCustomer and return a user-friendly error page instead of a stack trace or 500 error.",
-    get_entitlements: "GetEntitlements returned no active entitlements. Verify your subscription is active in Partner Central and that you are calling the API from the seller account. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-contract.html' target='_blank'>See docs →</a>",
     meter_usage: "BatchMeterUsage failed. Verify your dimension name matches exactly what is defined in your listing and that your listing is in Limited or Live state. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-metering.html' target='_blank'>See docs →</a>",
     concurrent_agreements: "Concurrent Agreements is not enabled. This is required for all new SaaS products from June 1, 2026. Complete the integration and opt in via Partner Central. <a href='https://catalog.workshops.aws/mpseller/en-US/saas/integration-for-concurrent-agreements' target='_blank'>Integration lab →</a>",
     eventbridge: "No EventBridge rules found for AWS Marketplace events. SNS is being replaced by EventBridge — configure rules for aws.agreement-marketplace events to receive subscription notifications. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-eventbridge-integration.html' target='_blank'>See docs →</a>",
