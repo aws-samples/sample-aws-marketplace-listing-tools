@@ -54,8 +54,9 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 ## Deploy
 
 ### Prerequisites
-- AWS CLI configured with credentials for your AWS Marketplace seller account
+- AWS CLI and [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) installed
 - Python 3 and pip3
+- AWS CLI configured with credentials for your AWS Marketplace seller account
 - Account registered as an [AWS Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
 - Amazon Bedrock model access enabled for **Claude 3 Haiku** in **us-east-1** (used by the Listing Effectiveness Scorer). Enable via the [Bedrock console](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
 - A SaaS listing in **Limited** state (required to run integration tests)
@@ -65,72 +66,16 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 ### Steps
 
 1. Clone this repository
-2. Package the Lambda function:
+2. Build and deploy:
 
 ```bash
-cd backend
-pip3 install -r requirements.txt -t package/
-cp handler.py package/
-cd package && zip -r ../function.zip . && cd ..
-rm -rf package
-cd ..
+sam build --template-file infra/template.yaml
+sam deploy
 ```
 
-3. Deploy the CloudFormation stack:
+3. When prompted, confirm the changeset. SAM packages the Lambda, uploads it to S3, deploys the stack, and outputs the **TestToolUrl**.
 
-```bash
-aws cloudformation deploy \
-  --template-file infra/template.yaml \
-  --stack-name aws-marketplace-seller-toolkit \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
-4. Update the Lambda function code:
-
-```bash
-FUNCTION_NAME=$(aws cloudformation describe-stack-resource \
-  --stack-name aws-marketplace-seller-toolkit \
-  --logical-resource-id LambdaFunction \
-  --query "StackResourceDetail.PhysicalResourceId" \
-  --output text \
-  --region us-east-1)
-
-aws lambda update-function-code \
-  --function-name $FUNCTION_NAME \
-  --zip-file fileb://backend/function.zip \
-  --region us-east-1
-```
-
-5. Get the stack outputs:
-
-```bash
-aws cloudformation describe-stacks \
-  --stack-name aws-marketplace-seller-toolkit \
-  --query "Stacks[0].Outputs" \
-  --region us-east-1
-```
-
-6. Upload the frontend with the API endpoint injected:
-
-```bash
-API_ENDPOINT=$(aws cloudformation describe-stacks \
-  --stack-name aws-marketplace-seller-toolkit \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
-  --output text \
-  --region us-east-1)
-
-FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name aws-marketplace-seller-toolkit \
-  --query "Stacks[0].Outputs[?OutputKey=='FrontendBucket'].OutputValue" \
-  --output text \
-  --region us-east-1)
-
-sed "s|__API_ENDPOINT__|$API_ENDPOINT|g" frontend/index.html > /tmp/index.html
-aws s3 cp /tmp/index.html s3://$FRONTEND_BUCKET/index.html --content-type text/html --region us-east-1
-```
-
-7. Open the **TestToolUrl** from the stack outputs in your browser.
+4. Open the **TestToolUrl** in your browser.
 
 ## Usage
 
@@ -144,7 +89,7 @@ aws s3 cp /tmp/index.html s3://$FRONTEND_BUCKET/index.html --content-type text/h
 ## Cleanup
 
 ```bash
-aws cloudformation delete-stack --stack-name aws-marketplace-seller-toolkit --region us-east-1
+sam delete --stack-name aws-marketplace-seller-toolkit --region us-east-1
 ```
 
 ## Project Structure
@@ -156,7 +101,8 @@ backend/
 frontend/
   index.html          Single-page UI (no build step)
 infra/
-  template.yaml       CloudFormation template (Lambda, API Gateway, S3, CloudFront, IAM)
+  template.yaml       SAM template (Lambda, API Gateway, S3, CloudFront, IAM)
+samconfig.toml        SAM deploy defaults (stack name, region, capabilities)
 ARCHITECTURE.md       Technical walkthrough
 API_REFERENCE.md      API endpoint documentation
 DESCRIPTION.md        Problem statement and product description

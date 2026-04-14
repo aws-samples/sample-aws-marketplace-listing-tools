@@ -1,95 +1,56 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: AWS Marketplace SaaS Integration Tester
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Marketplace Seller Toolkit — SaaS integration tester and listing effectiveness scorer
 
-Parameters:
-  AssetsBucketUrl:
-    Type: String
-    Description: Base URL of the Workshop Studio assets bucket (e.g. https://ws-assets-prod-iad-r-iad-ed304a55c2ca1aee.s3.us-east-1.amazonaws.com/WORKSHOP_ID)
-    Default: ""
-  AssetsBucketName:
-    Type: String
-    Description: Name of the S3 bucket containing the Lambda zip and frontend HTML
-    Default: ""
-  AssetsKeyPrefix:
-    Type: String
-    Description: S3 key prefix for assets (e.g. cc168d1f-b5c7-4b68-a2f9-d785d68b2f19/saas-tester)
-    Default: ""
-
-Conditions:
-  HasS3Assets: !Not [!Equals [!Ref AssetsBucketName, ""]]
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 256
+    Runtime: python3.12
 
 Resources:
 
   # ── Lambda ──────────────────────────────────────────────────────────────────
 
-  LambdaRole:
-    Type: AWS::IAM::Role
+  ToolkitFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: mp-api-access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - aws-marketplace:ResolveCustomer
-                  - aws-marketplace:GetEntitlements
-                  - aws-marketplace:MeterUsage
-                  - aws-marketplace:BatchMeterUsage
-                  - aws-marketplace:DescribeEntity
-                  - aws-marketplace:ListEntities
-                  - bedrock:InvokeModel
-                  - events:ListRules
-                  - cloudtrail:LookupEvents
-                  - sts:GetCallerIdentity
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                Resource: !Sub "${FrontendBucket.Arn}/*"
-
-  LambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Runtime: python3.12
       Handler: handler.lambda_handler
-      Role: !GetAtt LambdaRole.Arn
-      Timeout: 60
-      MemorySize: 256
-      Code:
-        !If
-          - HasS3Assets
-          - S3Bucket: !Ref AssetsBucketName
-            S3Key: !Sub "${AssetsKeyPrefix}/function.zip"
-          - ZipFile: |
-              def lambda_handler(event, context):
-                  return {"statusCode": 200, "body": "placeholder - update Lambda code manually"}
-
-  LambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref LambdaFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/*"
+      CodeUri: ../backend/
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - aws-marketplace:ResolveCustomer
+                - aws-marketplace:GetEntitlements
+                - aws-marketplace:MeterUsage
+                - aws-marketplace:BatchMeterUsage
+                - aws-marketplace:DescribeEntity
+                - aws-marketplace:ListEntities
+                - bedrock:InvokeModel
+                - events:ListRules
+                - cloudtrail:LookupEvents
+                - sts:GetCallerIdentity
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub "${FrontendBucket.Arn}/*"
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /test
+            Method: POST
 
   # ── API Gateway ──────────────────────────────────────────────────────────────
 
   Api:
-    Type: AWS::ApiGatewayV2::Api
+    Type: AWS::Serverless::HttpApi
     Properties:
-      Name: aws-marketplace-seller-toolkit-api
-      ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
           - "*"
@@ -98,28 +59,6 @@ Resources:
           - OPTIONS
         AllowHeaders:
           - Content-Type
-
-  Integration:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties:
-      ApiId: !Ref Api
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
-      PayloadFormatVersion: "2.0"
-
-  Route:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref Api
-      RouteKey: "POST /test"
-      Target: !Sub "integrations/${Integration}"
-
-  Stage:
-    Type: AWS::ApiGatewayV2::Stage
-    Properties:
-      ApiId: !Ref Api
-      StageName: "$default"
-      AutoDeploy: true
 
   # ── Frontend S3 + CloudFront ─────────────────────────────────────────────────
 
@@ -174,91 +113,65 @@ Resources:
 
   # ── Custom Resource: Deploy Frontend ───────────────────────────────────────
 
-  FrontendDeployRole:
-    Type: AWS::IAM::Role
-    Condition: HasS3Assets
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: frontend-deploy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${AssetsBucketName}/${AssetsKeyPrefix}/*"
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                Resource: !Sub "${FrontendBucket.Arn}/*"
-
   FrontendDeployFunction:
-    Type: AWS::Lambda::Function
-    Condition: HasS3Assets
+    Type: AWS::Serverless::Function
     Properties:
-      Runtime: python3.12
       Handler: index.handler
-      Role: !GetAtt FrontendDeployRole.Arn
+      Runtime: python3.12
       Timeout: 60
-      Code:
-        ZipFile: |
-          import boto3
-          import cfnresponse
-          import urllib.request
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "${FrontendBucket.Arn}/*"
+      InlineCode: |
+        import boto3
+        import cfnresponse
+        import urllib.request
 
-          def handler(event, context):
-              try:
-                  if event['RequestType'] == 'Delete':
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                      return
+        def handler(event, context):
+            try:
+                if event['RequestType'] == 'Delete':
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                    return
 
-                  props = event['ResourceProperties']
-                  source_bucket = props['SourceBucket']
-                  source_key = props['SourceKey']
-                  dest_bucket = props['DestBucket']
-                  api_endpoint = props['ApiEndpoint']
+                props = event['ResourceProperties']
+                html_url = props['HtmlUrl']
+                dest_bucket = props['DestBucket']
+                api_endpoint = props['ApiEndpoint']
 
-                  s3 = boto3.client('s3')
-                  resp = s3.get_object(Bucket=source_bucket, Key=source_key)
-                  html = resp['Body'].read().decode('utf-8')
-                  html = html.replace('__API_ENDPOINT__', api_endpoint)
+                with urllib.request.urlopen(html_url) as resp:
+                    html = resp.read().decode('utf-8')
+                html = html.replace('__API_ENDPOINT__', api_endpoint)
 
-                  s3.put_object(
-                      Bucket=dest_bucket,
-                      Key='index.html',
-                      Body=html.encode('utf-8'),
-                      ContentType='text/html',
-                  )
+                s3 = boto3.client('s3')
+                s3.put_object(
+                    Bucket=dest_bucket,
+                    Key='index.html',
+                    Body=html.encode('utf-8'),
+                    ContentType='text/html',
+                )
 
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Status': 'Frontend deployed'})
-              except Exception as e:
-                  print(f'Error: {e}')
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Status': 'Frontend deployed'})
+            except Exception as e:
+                print(f'Error: {e}')
+                cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
 
   FrontendDeploy:
     Type: Custom::FrontendDeploy
-    Condition: HasS3Assets
     DependsOn:
       - FrontendBucketPolicy
     Properties:
       ServiceToken: !GetAtt FrontendDeployFunction.Arn
-      SourceBucket: !Ref AssetsBucketName
-      SourceKey: !Sub "${AssetsKeyPrefix}/index.html"
+      HtmlUrl: !Sub "https://raw.githubusercontent.com/aws-samples/aws-marketplace-seller-toolkit/main/frontend/index.html"
       DestBucket: !Ref FrontendBucket
       ApiEndpoint: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/test"
 
 Outputs:
   TestToolUrl:
-    Description: Open this URL to use the SaaS Integration Tester
+    Description: Open this URL to use the AWS Marketplace Seller Toolkit
     Value: !Sub "https://${CloudFrontDistribution.DomainName}"
 
   ApiEndpoint:

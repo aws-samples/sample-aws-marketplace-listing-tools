@@ -1,0 +1,6 @@
+[default.deploy.parameters]
+stack_name = "aws-marketplace-seller-toolkit"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+resolve_s3 = true
