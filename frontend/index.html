@@ -172,6 +172,8 @@
 
 <script>
 const STEPS = {
+  registration_ssl: "HTTPS Certificate",
+  fulfillment_url_match: "Registration URL Match",
   registration_page: "Registration Page",
   resolve_customer: "ResolveCustomer",
   resolve_customer_history: "ResolveCustomer History (CloudTrail)",
@@ -185,6 +187,8 @@ const STEPS = {
 };
 
 const STEP_DESC = {
+  registration_ssl: "Validates that your registration page has a valid HTTPS certificate from a trusted certificate authority. Expired, self-signed, or soon-to-expire certificates will fail MCO review.",
+  fulfillment_url_match: "Compares the registration URL you provided with the FulfillmentUrl configured in your listing to ensure they match.",
   registration_page: "Buyers are redirected here after subscribing. MCO verifies your page loads correctly and accepts the marketplace token. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html' target='_blank' style='color:#0073bb'>Docs →</a>",
   resolve_customer: "Validates the token can be exchanged for a customer identifier using the Marketplace API.",
   resolve_customer_history: "Checks CloudTrail to confirm your application is calling ResolveCustomer when buyers land on your registration page.",
@@ -263,7 +267,10 @@ function toggleMeteringFields() {
 
 function getStepsToRun() {
   const type = document.getElementById("listingType").value;
-  const steps = ["registration_page", "resolve_customer", "resolve_customer_history", "registration_error_handling"];
+  const entityId = document.getElementById("entityId").value.trim();
+  const steps = ["registration_ssl"];
+  if (entityId) steps.push("fulfillment_url_match");
+  steps.push("registration_page", "resolve_customer", "resolve_customer_history", "registration_error_handling");
   if (type !== "metering") steps.push("get_entitlements");
   if (type === "metering" || type === "both") steps.push("meter_usage", "metering_history");
   steps.push("notification_endpoint", "concurrent_agreements", "eventbridge");
@@ -390,7 +397,22 @@ async function runTests() {
     updateStep(step, "running", "Running...");
     try {
       let result;
-      if (step === "registration_page") {
+      if (step === "registration_ssl") {
+        result = await callApi(endpoint, "check_registration_ssl", { registration_page_url: registrationUrl });
+        if (result.pass) {
+          updateStep(step, "pass", result.note, { issuer: result.issuer, expiry_date: result.expiry_date, days_until_expiry: result.days_until_expiry });
+        } else {
+          updateStep(step, "fail", result.note || result.error, result.issuer ? { issuer: result.issuer, expiry_date: result.expiry_date, is_self_signed: result.is_self_signed } : null);
+        }
+
+      } else if (step === "fulfillment_url_match") {
+        const entityId = document.getElementById("entityId").value.trim();
+        result = await callApi(endpoint, "check_fulfillment_url_match", { registration_page_url: registrationUrl, entity_id: entityId });
+        const fmState = result.pass ? "pass" : "warning";
+        updateStep(step, fmState, result.note, { listing_url: result.listing_url, provided_url: result.provided_url });
+        if (!result.pass) continue;
+
+      } else if (step === "registration_page") {
         result = await callApi(endpoint, "check_registration_page", { registration_page_url: registrationUrl, registration_token: token });
         updateStep(step, result.pass ? "pass" : "fail", result.note || result.error, { status_code: result.status_code, final_url: result.final_url });
 
@@ -558,6 +580,8 @@ for (const entitlement of response.Entitlements) {
   const skipped = allSteps.filter(el => el?.classList.contains("skipped")).length;
 
   const failMessages = {
+    registration_ssl: "Your registration page's HTTPS certificate is invalid, expired, or self-signed. Use a trusted CA certificate (e.g. ACM, Let's Encrypt).",
+    fulfillment_url_match: "The registration URL you provided does not match the FulfillmentUrl in your listing. Ensure they are the same.",
     registration_page: "Your registration page is not loading correctly. MCO will fail this check — ensure the page is publicly accessible via HTTPS and accepts the marketplace token parameter. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html' target='_blank'>See docs →</a>",
     resolve_customer: "ResolveCustomer failed. This is a critical MCO requirement — your backend must call this API with the token immediately after the buyer lands on your registration page. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html#saas-resolve-customer' target='_blank'>See docs →</a>",
     registration_error_handling: "Your registration page crashes or exposes error details when given an invalid token. Catch exceptions from ResolveCustomer and return a user-friendly error page instead of a stack trace or 500 error.",
@@ -570,15 +594,26 @@ for (const entitlement of response.Entitlements) {
   const failDetails = failedSteps.map(s => `<li>${failMessages[s] || s}</li>`).join("");
 
   const allPassed = failed === 0;
+  const readyBadge = allPassed
+    ? '<span style="display:inline-block;background:#1d8348;color:white;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600">✓ Ready</span>'
+    : '<span style="display:inline-block;background:#c0392b;color:white;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600">✗ Not Ready</span>';
   const summaryColor = allPassed ? "#1d8348" : "#c0392b";
   const summaryBg = allPassed ? "#f0faf4" : "#fdf3f2";
   const summaryBorder = allPassed ? "#1d8348" : "#c0392b";
 
+  const countsHtml = `<p style="font-size:13px;color:#555;margin:8px 0">${passed} passed, ${failed} failed, ${warned} warning${warned !== 1 ? "s" : ""}, ${skipped} skipped</p>`;
+  const warningNote = warned > 0 ? `<p style="font-size:12px;color:#d68910;margin-top:6px">⚠ Warnings don't block MCO review but should be addressed.</p>` : "";
+
+  const retryBtn = failed > 0 ? `<button class="primary" id="retryFailedBtn" onclick="retryFailed()" style="margin-top:12px;background:#c0392b;font-size:13px;padding:8px 16px">↻ Retry Failed Steps</button>` : "";
+
   const summaryHtml = `
     <div id="test-summary" style="border:1px solid ${summaryBorder};background:${summaryBg};border-radius:8px;padding:20px;margin-bottom:16px">
-      <h3 style="font-size:15px;font-weight:600;color:${summaryColor};margin-bottom:10px">
-        ${allPassed ? "✓ All tests passed — you're ready for MCO review" : `✗ ${failed} test${failed !== 1 ? "s" : ""} failed`}
-      </h3>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <h3 style="font-size:15px;font-weight:600;color:${summaryColor};margin:0">MCO Readiness</h3>
+        ${readyBadge}
+      </div>
+      ${countsHtml}
+      ${warningNote}
       ${allPassed
         ? `<p style="font-size:13px;color:#555;margin-bottom:14px">Your SaaS listing integration is working correctly. Follow these steps to request your listing goes live:</p>
            <ol style="font-size:13px;color:#555;padding-left:18px;line-height:2">
@@ -590,12 +625,141 @@ for (const entitlement of response.Entitlements) {
              <li>Once approved, your listing status will change from <strong>Limited</strong> to <strong>Live</strong></li>
            </ol>
            <p style="font-size:12px;color:#888;margin-top:12px">💡 Tip: Run the <strong>Listing Effectiveness</strong> tab before submitting to maximise your listing's discoverability and conversion rate.</p>`
-        : `<p style="font-size:13px;color:#555;margin-bottom:10px">Fix the following issues before submitting for MCO review:</p><ul style="font-size:13px;color:#555;padding-left:18px;line-height:1.8">${failDetails}</ul>`
+        : `<p style="font-size:13px;color:#555;margin-bottom:10px">Fix the following issues before submitting for MCO review:</p><ul style="font-size:13px;color:#555;padding-left:18px;line-height:1.8">${failDetails}</ul>${retryBtn}`
       }
-      ${skipped > 0 ? `<p style="font-size:12px;color:#888;margin-top:8px">${skipped} step${skipped !== 1 ? "s" : ""} skipped — see individual results above.</p>` : ""}
     </div>`;
 
+  // Enhancement 3: Export toolbar for integration test results
+  const toolbarHtml = `
+    <div class="toolbar" id="integration-toolbar">
+      <button onclick="exportIntegrationReport()">⬇ Export report</button>
+      <button onclick="copyIntegrationReport()">⎘ Copy to clipboard</button>
+    </div>`;
+
+  resultsEl.insertAdjacentHTML("afterbegin", toolbarHtml);
   resultsEl.insertAdjacentHTML("afterbegin", summaryHtml);
+}
+
+// Enhancement 3: Export and copy integration test results
+function _collectIntegrationResults() {
+  const stepEls = document.querySelectorAll("#results .step");
+  const lines = ["AWS Marketplace Integration Test Report", `Date: ${new Date().toISOString()}`, ""];
+  stepEls.forEach(el => {
+    const title = el.querySelector("h3")?.textContent || "Unknown";
+    const status = el.classList.contains("pass") ? "PASS" : el.classList.contains("fail") ? "FAIL" : el.classList.contains("warning") ? "WARNING" : el.classList.contains("skipped") ? "SKIPPED" : "PENDING";
+    const note = el.querySelector("p.status")?.textContent || "";
+    lines.push(`[${status}] ${title}`);
+    if (note) lines.push(`  ${note}`);
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function exportIntegrationReport() {
+  const text = _collectIntegrationResults();
+  const blob = new Blob([text], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `mp-integration-report-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+}
+
+function copyIntegrationReport() {
+  const text = _collectIntegrationResults();
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = "✓ Copied!";
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
+}
+
+// Enhancement 4: Retry failed steps
+async function retryFailed() {
+  const endpoint = document.getElementById("apiEndpoint").value.trim();
+  const productCode = document.getElementById("productCode").value.trim();
+  const token = getTokenFromUrl();
+  const registrationUrl = getRegistrationBaseUrl();
+  const dimension = document.getElementById("meteringDimension").value.trim();
+  const quantity = document.getElementById("meteringQuantity").value;
+
+  // Collect all failed step IDs
+  const failedEls = document.querySelectorAll("#results .step.fail");
+  const failedIds = Array.from(failedEls).map(el => el.id.replace("step-", ""));
+  if (failedIds.length === 0) return;
+
+  const btn = document.getElementById("retryFailedBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Retrying..."; }
+
+  // Re-read customerIdentifier from a previous pass if available
+  let customerIdentifier = null;
+  let customerAWSAccountId = null;
+  const rcStep = document.getElementById("step-resolve_customer");
+  if (rcStep && rcStep.classList.contains("pass")) {
+    try {
+      const preData = JSON.parse(rcStep.querySelector("pre")?.textContent || "{}");
+      customerIdentifier = preData.customer_identifier;
+      customerAWSAccountId = preData.customer_aws_account_id;
+    } catch {}
+  }
+
+  for (const step of failedIds) {
+    updateStep(step, "running", "Retrying...");
+    try {
+      let result;
+      if (step === "registration_ssl") {
+        result = await callApi(endpoint, "check_registration_ssl", { registration_page_url: registrationUrl });
+        if (result.pass) {
+          updateStep(step, "pass", result.note, { issuer: result.issuer, expiry_date: result.expiry_date, days_until_expiry: result.days_until_expiry });
+        } else {
+          updateStep(step, "fail", result.note || result.error, null);
+        }
+      } else if (step === "fulfillment_url_match") {
+        const entityId = document.getElementById("entityId").value.trim();
+        result = await callApi(endpoint, "check_fulfillment_url_match", { registration_page_url: registrationUrl, entity_id: entityId });
+        updateStep(step, result.pass ? "pass" : "warning", result.note, null);
+      } else if (step === "registration_page") {
+        result = await callApi(endpoint, "check_registration_page", { registration_page_url: registrationUrl, registration_token: token });
+        updateStep(step, result.pass ? "pass" : "fail", result.note || result.error, { status_code: result.status_code });
+      } else if (step === "resolve_customer") {
+        result = await callApi(endpoint, "resolve_customer", { registration_token: token });
+        if (result.pass) { customerIdentifier = result.customer_identifier; customerAWSAccountId = result.customer_aws_account_id; }
+        updateStep(step, result.pass ? "pass" : "fail", result.pass ? "Customer resolved successfully" : result.error, result.pass ? { customer_identifier: result.customer_identifier } : null);
+      } else if (step === "registration_error_handling") {
+        result = await callApi(endpoint, "check_registration_error_handling", { registration_page_url: registrationUrl });
+        const ehState = result.pass ? "pass" : (result.has_stack_trace ? "warning" : "fail");
+        updateStep(step, ehState, result.note || result.error, null);
+      } else if (step === "meter_usage") {
+        if (!customerIdentifier || !dimension) { updateStep(step, "skipped", "Skipped — missing customer identifier or dimension"); continue; }
+        result = await callApi(endpoint, "meter_usage", { product_code: productCode, customer_identifier: customerIdentifier, customer_aws_account_id: customerAWSAccountId, dimension, quantity });
+        updateStep(step, result.pass ? "pass" : "fail", result.pass ? result.note : result.error, null);
+      } else if (step === "concurrent_agreements") {
+        const entityId = document.getElementById("entityId").value.trim();
+        if (!entityId) { updateStep(step, "skipped", "Skipped — no Product ID"); continue; }
+        result = await callApi(endpoint, "check_concurrent_agreements", { entity_id: entityId });
+        updateStep(step, result.pass ? "pass" : "fail", result.note || result.error, null);
+      } else {
+        updateStep(step, "fail", "Retry not supported for this step");
+      }
+    } catch (e) {
+      updateStep(step, "fail", `Retry failed: ${e.message}`);
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = "↻ Retry Failed Steps"; }
+
+  // Update summary counts
+  const allStepEls = document.querySelectorAll("#results .step");
+  const newPassed = document.querySelectorAll("#results .step.pass").length;
+  const newFailed = document.querySelectorAll("#results .step.fail").length;
+  const newWarned = document.querySelectorAll("#results .step.warning").length;
+  const newSkipped = document.querySelectorAll("#results .step.skipped").length;
+  const summaryEl = document.getElementById("test-summary");
+  if (summaryEl && newFailed === 0) {
+    summaryEl.style.borderColor = "#1d8348";
+    summaryEl.style.background = "#f0faf4";
+    summaryEl.innerHTML = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h3 style="font-size:15px;font-weight:600;color:#1d8348;margin:0">MCO Readiness</h3><span style="display:inline-block;background:#1d8348;color:white;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600">✓ Ready</span></div><p style="font-size:13px;color:#555">${newPassed} passed, 0 failed, ${newWarned} warning${newWarned !== 1 ? "s" : ""}, ${newSkipped} skipped</p>${newWarned > 0 ? '<p style="font-size:12px;color:#d68910;margin-top:6px">⚠ Warnings don\'t block MCO review but should be addressed.</p>' : ''}`;
+  }
 }
 
 async function scoreListing() {

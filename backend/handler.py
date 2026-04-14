@@ -388,6 +388,146 @@ def derive_product_context(details):
 
 # ── Lambda Handler ───────────────────────────────────────────────────────────
 
+def check_registration_ssl(body):
+    """Check the HTTPS certificate of the registration page URL."""
+    import ssl
+    import socket
+    import datetime
+    from urllib.parse import urlparse
+
+    url = body.get("registration_page_url")
+    if not url:
+        return {"pass": False, "error": "registration_page_url is required"}
+
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        port = parsed.port or 443
+
+        if not hostname:
+            return {"pass": False, "error": "Could not parse hostname from URL"}
+
+        ctx = ssl.create_default_context()
+        with socket.create_connection((hostname, port), timeout=10) as sock:
+            with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
+                cert = ssock.getpeercert()
+
+        # Extract issuer
+        issuer_parts = []
+        for rdn in cert.get("issuer", ()):
+            for attr_type, attr_value in rdn:
+                if attr_type in ("organizationName", "commonName"):
+                    issuer_parts.append(attr_value)
+        issuer = ", ".join(issuer_parts) if issuer_parts else "Unknown"
+
+        # Extract subject for self-signed check
+        subject_parts = []
+        for rdn in cert.get("subject", ()):
+            for attr_type, attr_value in rdn:
+                if attr_type in ("organizationName", "commonName"):
+                    subject_parts.append(attr_value)
+        subject = ", ".join(subject_parts) if subject_parts else "Unknown"
+
+        is_self_signed = issuer == subject
+
+        # Parse expiry
+        not_after = cert.get("notAfter", "")
+        expiry_date = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+        now = datetime.datetime.utcnow()
+        days_until_expiry = (expiry_date - now).days
+        is_expired = days_until_expiry < 0
+        expiring_soon = days_until_expiry <= 30
+
+        passes = not is_expired and not is_self_signed and not expiring_soon
+
+        if is_expired:
+            note = f"Certificate expired {abs(days_until_expiry)} day(s) ago. Renew immediately — MCO will reject an expired certificate."
+        elif is_self_signed:
+            note = "Certificate is self-signed. Use a certificate from a trusted CA (e.g. ACM, Let's Encrypt). MCO will reject self-signed certificates."
+        elif expiring_soon:
+            note = f"Certificate expires in {days_until_expiry} day(s). Renew before submitting for MCO review."
+        else:
+            note = f"Valid certificate from {issuer}, expires in {days_until_expiry} days."
+
+        return {
+            "pass": passes,
+            "issuer": issuer,
+            "expiry_date": expiry_date.isoformat(),
+            "days_until_expiry": days_until_expiry,
+            "is_self_signed": is_self_signed,
+            "note": note,
+        }
+    except ssl.SSLCertVerificationError as e:
+        return {"pass": False, "error": f"SSL certificate verification failed: {str(e)}", "note": "Certificate is invalid or untrusted. Use a certificate from a trusted CA."}
+    except socket.timeout:
+        return {"pass": False, "error": "Connection timed out while checking SSL certificate"}
+    except Exception as e:
+        return {"pass": False, "error": f"SSL check failed: {str(e)}"}
+
+
+def check_fulfillment_url_match(body):
+    """Check if the provided registration_page_url matches the FulfillmentUrl in the listing."""
+    from urllib.parse import urlparse
+
+    url = body.get("registration_page_url")
+    entity_id = body.get("entity_id")
+
+    if not url:
+        return {"pass": False, "error": "registration_page_url is required"}
+    if not entity_id:
+        return {"pass": False, "error": "entity_id is required"}
+
+    try:
+        mp = boto3.client("marketplace-catalog", region_name="us-east-1")
+        resp = mp.describe_entity(Catalog="AWSMarketplace", EntityId=entity_id)
+        raw = resp.get("Details", "{}")
+        details = json.loads(raw) if isinstance(raw, str) else raw
+
+        # Extract FulfillmentUrl
+        versions = details.get("Versions", [])
+        fulfillment_url = ""
+        if versions:
+            delivery_options = versions[0].get("DeliveryOptions", [])
+            if delivery_options:
+                fulfillment_url = delivery_options[0].get("FulfillmentUrl", "")
+
+        if not fulfillment_url:
+            return {
+                "pass": False,
+                "listing_url": None,
+                "provided_url": url,
+                "match": False,
+                "note": "No FulfillmentUrl found in the listing. Ensure your listing has a registration page URL configured.",
+            }
+
+        # Normalize both URLs for comparison — strip trailing slashes, compare origins + paths
+        def normalize(u):
+            parsed = urlparse(u.rstrip("/"))
+            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/").lower()
+
+        norm_listing = normalize(fulfillment_url)
+        norm_provided = normalize(url)
+        match = norm_listing == norm_provided
+
+        if match:
+            note = "Registration URL matches the FulfillmentUrl configured in your listing."
+        else:
+            note = (f"URL mismatch — your listing's FulfillmentUrl is '{fulfillment_url}' but you provided '{url}'. "
+                    "Ensure you are testing with the same URL configured in your listing.")
+
+        return {
+            "pass": match,
+            "listing_url": fulfillment_url,
+            "provided_url": url,
+            "match": match,
+            "note": note,
+        }
+    except ClientError as e:
+        return {"pass": False, "error": e.response["Error"]["Message"]}
+    except Exception as e:
+        return {"pass": False, "error": f"Fulfillment URL check failed: {str(e)}"}
+
+
 def lambda_handler(event, context):
     body = json.loads(event.get("body", "{}"))
     action = body.get("action")
@@ -408,6 +548,8 @@ def lambda_handler(event, context):
         "check_resolve_customer_history": check_resolve_customer_history,
         "check_listing_completeness": check_listing_completeness,
         "check_notification_endpoint": check_notification_endpoint,
+        "check_registration_ssl": check_registration_ssl,
+        "check_fulfillment_url_match": check_fulfillment_url_match,
     }
 
     if action not in handlers:
