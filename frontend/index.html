@@ -174,7 +174,6 @@
 const STEPS = {
   registration_page: "Registration Page",
   resolve_customer: "ResolveCustomer",
-  resolve_customer_causality: "ResolveCustomer Causality (CloudTrail)",
   resolve_customer_history: "ResolveCustomer History (CloudTrail)",
   registration_error_handling: "Error Handling (Invalid Token)",
   get_entitlements: "GetEntitlements",
@@ -188,7 +187,6 @@ const STEPS = {
 const STEP_DESC = {
   registration_page: "Buyers are redirected here after subscribing. MCO verifies your page loads correctly and accepts the marketplace token. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-registration.html' target='_blank' style='color:#0073bb'>Docs →</a>",
   resolve_customer: "Validates the token can be exchanged for a customer identifier using the Marketplace API.",
-  resolve_customer_causality: "Submits the token to your registration page via POST and checks CloudTrail to verify your backend called ResolveCustomer in response. Note: CloudTrail events can take 5-15 minutes to appear.",
   resolve_customer_history: "Checks CloudTrail to confirm your application is calling ResolveCustomer when buyers land on your registration page.",
   registration_error_handling: "Sends an invalid token to your registration page to verify it handles errors gracefully without crashing or exposing stack traces.",
   get_entitlements: "Verifies the buyer has an active entitlement for your product. Required for contract-based listings to confirm access rights. <a href='https://docs.aws.amazon.com/marketplace/latest/userguide/saas-integrate-contract.html' target='_blank' style='color:#0073bb'>Docs →</a>",
@@ -226,13 +224,6 @@ function showLang2(btn, lang) {
   btn.style.background = "#ff9900"; btn.style.color = "white";
 }
 
-function showLang3(btn, lang) {
-  document.getElementById("code-caus-python").style.display = lang === "python" ? "" : "none";
-  document.getElementById("code-caus-nodejs").style.display = lang === "nodejs" ? "" : "none";
-  btn.parentElement.querySelectorAll("button").forEach(b => { b.style.background = "white"; b.style.color = "#333"; });
-  btn.style.background = "#ff9900"; btn.style.color = "white";
-}
-
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("active", ["integration","scorer"][i] === name));
   document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
@@ -265,7 +256,7 @@ function toggleMeteringFields() {
 
 function getStepsToRun() {
   const type = document.getElementById("listingType").value;
-  const steps = ["registration_page", "resolve_customer", "resolve_customer_causality", "resolve_customer_history", "registration_error_handling"];
+  const steps = ["registration_page", "resolve_customer", "resolve_customer_history", "registration_error_handling"];
   if (type !== "metering") steps.push("get_entitlements");
   if (type === "metering" || type === "both") steps.push("meter_usage", "metering_history");
   steps.push("notification_endpoint", "concurrent_agreements", "eventbridge");
@@ -404,28 +395,6 @@ async function runTests() {
         }
         updateStep(step, result.pass ? "pass" : "fail", result.pass ? "Customer resolved successfully" : result.error,
           result.pass ? { customer_identifier: result.customer_identifier, customer_aws_account_id: result.customer_aws_account_id, product_code: result.product_code } : null);
-
-      } else if (step === "resolve_customer_causality") {
-        result = await callApi(endpoint, "check_resolve_customer_causality", { registration_page_url: registrationUrl, registration_token: token });
-        const causState = result.pass ? "pass" : "warning";
-        updateStep(step, causState, result.note || result.error,
-          result.pass ? { causality_confirmed: result.causality_confirmed, pre_count: result.pre_count, post_count: result.post_count, time_window_seconds: result.time_window_seconds } : { pre_count: result.pre_count, post_count: result.post_count, time_window_seconds: result.time_window_seconds });
-        if (!result.pass && result.code_example) {
-          const el = document.getElementById(`step-resolve_customer_causality`);
-          if (el) {
-            el.querySelector(".step-content").insertAdjacentHTML("beforeend", `
-              <div style="margin-top:10px">
-                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#555">Example implementation:</div>
-                <div style="display:flex;gap:8px;margin-bottom:6px">
-                  <button onclick="showLang3(this,'python')" style="font-size:11px;padding:2px 8px;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:#ff9900;color:white">Python</button>
-                  <button onclick="showLang3(this,'nodejs')" style="font-size:11px;padding:2px 8px;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:white;color:#333">Node.js</button>
-                </div>
-                <pre id="code-caus-python" style="font-size:11px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre">${result.code_example.python}</pre>
-                <pre id="code-caus-nodejs" style="display:none;font-size:11px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:4px;overflow-x:auto;white-space:pre">${result.code_example.nodejs}</pre>
-              </div>`);
-          }
-        }
-        continue;
 
       } else if (step === "resolve_customer_history") {
         result = await callApi(endpoint, "check_resolve_customer_history", {});

@@ -13,7 +13,6 @@ Validates all required SaaS integrations against a live Limited listing:
 |------|-------------|
 | Registration Page (POST) | Page accepts POST with marketplace token in form body |
 | ResolveCustomer | Token exchange returns a valid customer identifier |
-| ResolveCustomer Causality | Verifies your registration page triggers a ResolveCustomer call via CloudTrail |
 | ResolveCustomer History | Checks CloudTrail for ResolveCustomer calls from your application in the last 7 days |
 | Error Handling | Sends an invalid token to verify graceful error handling (no stack traces) |
 | GetEntitlements | Active entitlements exist (contract-based listings) |
