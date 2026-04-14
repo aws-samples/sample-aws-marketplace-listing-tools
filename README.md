@@ -81,7 +81,7 @@ cd ..
 ```bash
 aws cloudformation deploy \
   --template-file infra/template.yaml \
-  --stack-name mp-saas-tester \
+  --stack-name aws-marketplace-seller-toolkit \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
@@ -89,7 +89,7 @@ aws cloudformation deploy \
 
 ```bash
 aws lambda update-function-code \
-  --function-name mp-saas-tester \
+  --function-name aws-marketplace-seller-toolkit \
   --zip-file fileb://backend/function.zip
 ```
 
@@ -97,7 +97,7 @@ aws lambda update-function-code \
 
 ```bash
 aws cloudformation describe-stacks \
-  --stack-name mp-saas-tester \
+  --stack-name aws-marketplace-seller-toolkit \
   --query "Stacks[0].Outputs"
 ```
 
@@ -105,12 +105,12 @@ aws cloudformation describe-stacks \
 
 ```bash
 API_ENDPOINT=$(aws cloudformation describe-stacks \
-  --stack-name mp-saas-tester \
+  --stack-name aws-marketplace-seller-toolkit \
   --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text)
 
 FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name mp-saas-tester \
+  --stack-name aws-marketplace-seller-toolkit \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendBucket'].OutputValue" \
   --output text)
 
@@ -132,7 +132,7 @@ aws s3 cp /tmp/index.html s3://$FRONTEND_BUCKET/index.html --content-type text/h
 ## Cleanup
 
 ```bash
-aws cloudformation delete-stack --stack-name mp-saas-tester
+aws cloudformation delete-stack --stack-name aws-marketplace-seller-toolkit
 ```
 
 ## Project Structure

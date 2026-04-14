@@ -1,6 +1,23 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: AWS Marketplace SaaS Integration Tester
 
+Parameters:
+  AssetsBucketUrl:
+    Type: String
+    Description: Base URL of the Workshop Studio assets bucket (e.g. https://ws-assets-prod-iad-r-iad-ed304a55c2ca1aee.s3.us-east-1.amazonaws.com/WORKSHOP_ID)
+    Default: ""
+  AssetsBucketName:
+    Type: String
+    Description: Name of the S3 bucket containing the Lambda zip and frontend HTML
+    Default: ""
+  AssetsKeyPrefix:
+    Type: String
+    Description: S3 key prefix for assets (e.g. cc168d1f-b5c7-4b68-a2f9-d785d68b2f19/saas-tester)
+    Default: ""
+
+Conditions:
+  HasS3Assets: !Not [!Equals [!Ref AssetsBucketName, ""]]
+
 Resources:
 
   # ── Lambda ──────────────────────────────────────────────────────────────────
@@ -8,7 +25,7 @@ Resources:
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: mp-saas-tester-role
+      RoleName: aws-marketplace-seller-toolkit-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -45,15 +62,20 @@ Resources:
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: mp-saas-tester
+      FunctionName: aws-marketplace-seller-toolkit
       Runtime: python3.12
       Handler: handler.lambda_handler
       Role: !GetAtt LambdaRole.Arn
       Timeout: 60
+      MemorySize: 256
       Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              return {"statusCode": 200, "body": "placeholder - deploy with build.sh"}
+        !If
+          - HasS3Assets
+          - S3Bucket: !Ref AssetsBucketName
+            S3Key: !Sub "${AssetsKeyPrefix}/function.zip"
+          - ZipFile: |
+              def lambda_handler(event, context):
+                  return {"statusCode": 200, "body": "placeholder - update Lambda code manually"}
 
   LambdaPermission:
     Type: AWS::Lambda::Permission
@@ -68,7 +90,7 @@ Resources:
   Api:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: mp-saas-tester-api
+      Name: aws-marketplace-seller-toolkit-api
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
@@ -106,7 +128,7 @@ Resources:
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "mp-saas-tester-${AWS::AccountId}"
+      BucketName: !Sub "aws-marketplace-seller-toolkit-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -132,7 +154,7 @@ Resources:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: mp-saas-tester-oac
+        Name: aws-marketplace-seller-toolkit-oac
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -152,6 +174,92 @@ Resources:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+
+  # ── Custom Resource: Deploy Frontend ───────────────────────────────────────
+
+  FrontendDeployRole:
+    Type: AWS::IAM::Role
+    Condition: HasS3Assets
+    Properties:
+      RoleName: aws-marketplace-seller-toolkit-frontend-deploy-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: frontend-deploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${AssetsBucketName}/${AssetsKeyPrefix}/*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${FrontendBucket.Arn}/*"
+
+  FrontendDeployFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasS3Assets
+    Properties:
+      FunctionName: aws-marketplace-seller-toolkit-frontend-deploy
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt FrontendDeployRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import urllib.request
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+
+                  props = event['ResourceProperties']
+                  source_bucket = props['SourceBucket']
+                  source_key = props['SourceKey']
+                  dest_bucket = props['DestBucket']
+                  api_endpoint = props['ApiEndpoint']
+
+                  s3 = boto3.client('s3')
+                  resp = s3.get_object(Bucket=source_bucket, Key=source_key)
+                  html = resp['Body'].read().decode('utf-8')
+                  html = html.replace('__API_ENDPOINT__', api_endpoint)
+
+                  s3.put_object(
+                      Bucket=dest_bucket,
+                      Key='index.html',
+                      Body=html.encode('utf-8'),
+                      ContentType='text/html',
+                  )
+
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Status': 'Frontend deployed'})
+              except Exception as e:
+                  print(f'Error: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  FrontendDeploy:
+    Type: Custom::FrontendDeploy
+    Condition: HasS3Assets
+    DependsOn:
+      - FrontendBucketPolicy
+    Properties:
+      ServiceToken: !GetAtt FrontendDeployFunction.Arn
+      SourceBucket: !Ref AssetsBucketName
+      SourceKey: !Sub "${AssetsKeyPrefix}/index.html"
+      DestBucket: !Ref FrontendBucket
+      ApiEndpoint: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/test"
 
 Outputs:
   TestToolUrl:
