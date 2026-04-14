@@ -53,16 +53,6 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 
 ## Deploy
 
-### Option 1: Launch Stack (recommended)
-
-Click the button below to deploy directly into your AWS account:
-
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?stackName=mp-saas-tester&templateURL=TEMPLATE_S3_URL)
-
-> Replace `TEMPLATE_S3_URL` with the hosted template URL when publishing.
-
-### Option 2: Deploy with AWS CLI
-
 1. Clone this repository
 2. Package the Lambda function:
 
