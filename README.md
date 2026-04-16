@@ -13,20 +13,7 @@ Sellers submitting SaaS listings for review often discover integration issues on
 ## Features
 
 ### Integration Tests
-Validates all required SaaS integrations against a live Limited listing:
-
-| Test | Description |
-|------|-------------|
-| Registration Page (POST) | Page accepts POST with marketplace token in form body |
-| ResolveCustomer | Token exchange returns a valid customer identifier |
-| ResolveCustomer History | Checks CloudTrail for ResolveCustomer calls from your application in the last 7 days |
-| Error Handling | Sends an invalid token to verify graceful error handling (no stack traces) |
-| GetEntitlements (Guidance) | Code examples and guidance for calling GetEntitlements (MCO verifies via internal logs) |
-| BatchMeterUsage (Guidance) | Code examples and guidance for calling BatchMeterUsage (metering listings) |
-| Metering History | Checks CloudTrail for BatchMeterUsage calls from your application |
-| Notification Endpoint | EventBridge rules or SNS subscription configured for lifecycle events |
-| Concurrent Agreements | Enabled on listing (required for new SaaS products from June 1, 2026) |
-| EventBridge | Rules configured for aws.agreement-marketplace events |
+Validates SaaS integrations against a live Limited listing before submission. Catches common review failures: registration page not accepting POST tokens, missing ResolveCustomer calls, EventBridge not configured, and Concurrent Agreements not enabled. Includes code examples for GetEntitlements and BatchMeterUsage integration, plus CloudTrail history checks to verify your backend is calling the APIs correctly.
 
 ### Listing Effectiveness Scorer
 AI-powered scoring across 12 weighted categories with Amazon Bedrock (Claude):
@@ -51,11 +38,10 @@ The toolkit deploys a Lambda function behind API Gateway, with a static frontend
 - [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) v1 or later
 - [Python 3.9+](https://www.python.org/downloads/) (required by SAM to build the Lambda)
 - An AWS account [registered as a Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
-- Amazon Bedrock model access for **Claude 3 Haiku** in us-east-1 — [enable here](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
 - A SaaS listing in **Limited** state (for integration tests; the scorer works with any listing state)
+- Amazon Bedrock model access for **Claude 3 Haiku** in us-east-1 — [enable here](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
 - IAM permissions to deploy CloudFormation stacks. See [ARCHITECTURE.md](ARCHITECTURE.md#iam-permissions) for the minimum required policy.
-
-- [Authenticated AWS CLI session](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html) for your Marketplace seller account in **us-east-1**. Verify with `aws sts get-caller-identity --region us-east-1`
+- [Authenticated AWS CLI session](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html) for your Marketplace seller account in **us-east-1**
 
 > All resources deploy to **us-east-1**. AWS Marketplace APIs are only available in this region.
 
