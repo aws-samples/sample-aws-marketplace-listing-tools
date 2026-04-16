@@ -43,19 +43,7 @@ AI-powered scoring across 12 weighted categories with Amazon Bedrock (Claude):
 
 ## Architecture
 
-```
-Browser (CloudFront)
-    |  HTTP POST
-    v
-API Gateway -> Lambda (Python 3.12)
-                 |-- AWS Marketplace Catalog API
-                 |-- Marketplace Metering/Entitlement APIs
-                 |-- Amazon Bedrock (Claude 3 Haiku)
-                 |-- Amazon EventBridge
-                 |-- AWS CloudTrail
-```
-
-All API calls run within the seller's own AWS account. No credentials leave their environment.
+The toolkit deploys a Lambda function behind API Gateway, with a static frontend on S3/CloudFront. All API calls run within the seller's own AWS account. See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed walkthrough.
 
 ## Prerequisites
 
@@ -79,6 +67,7 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 aws --version          # Requires: aws-cli/2.x
 sam --version          # Requires: SAM CLI 1.x
 python3 --version      # Requires: Python 3.9+
+aws sts get-caller-identity --region us-east-1  # Verify authentication
 ```
 
 ### Step 2: Clone and deploy
