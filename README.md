@@ -6,6 +6,10 @@
 
 A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and score listing effectiveness. Deploys into the seller's own AWS account via AWS SAM.
 
+## Problem
+
+Sellers submitting SaaS listings for review often discover integration issues only after submission, adding days or weeks to time-to-live. Common failures include registration pages not accepting POST tokens, missing ResolveCustomer calls, metering dimension mismatches, and missing EventBridge configuration. This toolkit lets sellers find and fix these issues before submission.
+
 ## Features
 
 ### Integration Tests
@@ -122,7 +126,6 @@ infra/
 samconfig.toml        SAM deploy defaults (stack name, region, capabilities)
 ARCHITECTURE.md       Technical walkthrough
 API_REFERENCE.md      API endpoint documentation
-DESCRIPTION.md        Problem statement and product description
 CONTRIBUTING.md       Contribution guidelines
 ```
 

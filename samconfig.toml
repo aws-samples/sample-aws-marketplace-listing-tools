@@ -1,3 +1,5 @@
+version = 0.1
+
 [default.deploy.parameters]
 stack_name = "aws-marketplace-seller-toolkit"
 region = "us-east-1"

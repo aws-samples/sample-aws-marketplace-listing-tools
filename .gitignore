@@ -6,6 +6,7 @@ video-demo/
 .vscode/
 __pycache__/
 *.pyc
+.venv/
 build.sh
 publish.sh
 serve.sh
