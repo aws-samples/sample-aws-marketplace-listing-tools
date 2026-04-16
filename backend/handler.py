@@ -1833,19 +1833,33 @@ Be direct and specific. Do not use bullet points. Do not mention AWS Marketplace
 
 def _handle_cfn_event(event, context):
     """Handle CloudFormation custom resource events for frontend deployment."""
-    import cfnresponse
     import os
+    import urllib.request
+
+    response_url = event.get("ResponseURL", "")
+
+    def send_response(status, data):
+        body = json.dumps({
+            "Status": status,
+            "Reason": data.get("Error", "See CloudWatch logs"),
+            "PhysicalResourceId": context.log_stream_name if context else "frontend-deploy",
+            "StackId": event.get("StackId", ""),
+            "RequestId": event.get("RequestId", ""),
+            "LogicalResourceId": event.get("LogicalResourceId", ""),
+            "Data": data,
+        }).encode("utf-8")
+        req = urllib.request.Request(response_url, data=body, headers={"Content-Type": ""}, method="PUT")
+        urllib.request.urlopen(req)
 
     try:
         if event["RequestType"] == "Delete":
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            send_response("SUCCESS", {})
             return
 
         props = event["ResourceProperties"]
         dest_bucket = props["DestBucket"]
         api_endpoint = props["ApiEndpoint"]
 
-        # Read index.html from the Lambda package (same directory as handler.py)
         html_path = os.path.join(os.path.dirname(__file__), "index.html")
         with open(html_path, "r") as f:
             html = f.read()
@@ -1860,10 +1874,13 @@ def _handle_cfn_event(event, context):
             ContentType="text/html",
         )
 
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Status": "Frontend deployed"})
+        send_response("SUCCESS", {"Status": "Frontend deployed"})
     except Exception as e:
         print(f"Error: {e}")
-        cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
+        try:
+            send_response("FAILED", {"Error": str(e)})
+        except Exception:
+            pass
 
 
 def respond(status, body):
