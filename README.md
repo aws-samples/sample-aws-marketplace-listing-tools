@@ -22,7 +22,7 @@ Validates all required SaaS integrations against a live Limited listing:
 | ResolveCustomer History | Checks CloudTrail for ResolveCustomer calls from your application in the last 7 days |
 | Error Handling | Sends an invalid token to verify graceful error handling (no stack traces) |
 | GetEntitlements (Guidance) | Code examples and guidance for calling GetEntitlements (MCO verifies via internal logs) |
-| BatchMeterUsage | Usage records can be submitted (metering listings) |
+| BatchMeterUsage (Guidance) | Code examples and guidance for calling BatchMeterUsage (metering listings) |
 | Metering History | Checks CloudTrail for BatchMeterUsage calls from your application |
 | Notification Endpoint | EventBridge rules or SNS subscription configured for lifecycle events |
 | Concurrent Agreements | Enabled on listing (required for new SaaS products from June 1, 2026) |
