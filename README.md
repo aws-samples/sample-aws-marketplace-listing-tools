@@ -66,6 +66,7 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 - An AWS account [registered as a Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
 - Amazon Bedrock model access for **Claude 3 Haiku** in us-east-1 — [enable here](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
 - A SaaS listing in **Limited** state (for integration tests; the scorer works with any listing state)
+- IAM permissions to deploy CloudFormation stacks. The deploying user/role needs permissions for Lambda, API Gateway, S3, CloudFront, and IAM. `AdministratorAccess` or `PowerUserAccess` with IAM permissions will work. See `infra/template.yaml` for the full list of resources created.
 
 > All resources deploy to **us-east-1**. AWS Marketplace APIs are only available in this region.
 
@@ -80,8 +81,6 @@ python3 --version      # Requires: Python 3.9+
 ```
 
 ### Step 2: Authenticate to your AWS account
-
-Your account needs permissions to create Lambda, API Gateway, S3, CloudFront, and IAM resources.
 
 ```bash
 # Option A: Named profile
