@@ -33,6 +33,8 @@ AI-powered scoring across 12 weighted categories with Amazon Bedrock (Claude):
 - Per-highlight feedback identifying which bullet points need improvement
 - AI-generated executive summary and rewrite suggestions per field
 
+> **Note:** Scores are AI-generated guidance for improving listing discoverability and conversion. Recommendations are based on AWS Marketplace listing guidelines and PLG best practices. AI-generated rewrites (powered by Amazon Bedrock) should be reviewed before use.
+
 ## Architecture
 
 ```
