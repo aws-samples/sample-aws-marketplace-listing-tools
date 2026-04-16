@@ -57,45 +57,40 @@ API Gateway -> Lambda (Python 3.12)
 
 All API calls run within the seller's own AWS account. No credentials leave their environment.
 
-## Deploy
+## Prerequisites
 
-### Prerequisites
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) v2 or later
+- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) v1 or later
+- [Python 3.9+](https://www.python.org/downloads/) (required by SAM to build the Lambda)
+- [Make](https://www.gnu.org/software/make/) (included on macOS/Linux; optional on Windows)
+- An AWS account [registered as a Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
+- Amazon Bedrock model access for **Claude 3 Haiku** in us-east-1 — [enable here](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
+- A SaaS listing in **Limited** state (for integration tests; the scorer works with any listing state)
 
-**1. AWS CLI** — [Install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+> All resources deploy to **us-east-1**. AWS Marketplace APIs are only available in this region.
+
+## Getting Started
+
+### Step 1: Verify prerequisites
 
 ```bash
-aws --version
-# Requires: aws-cli/2.x or later
+aws --version          # Requires: aws-cli/2.x
+sam --version          # Requires: SAM CLI 1.x
+python3 --version      # Requires: Python 3.9+
 ```
 
-**2. AWS SAM CLI** — [Install guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+### Step 2: Authenticate to your AWS account
+
+Your account needs permissions to create Lambda, API Gateway, S3, CloudFront, and IAM resources.
 
 ```bash
-sam --version
-# Requires: SAM CLI 1.x or later
-```
-
-**3. Python 3** (required by SAM to build the Lambda)
-
-```bash
-python3 --version
-# Requires: Python 3.9 or later
-```
-
-**4. Make** (included on macOS and Linux; Windows users can use `sam build && sam deploy` directly)
-
-```bash
-make --version
-```
-
-**5. AWS authentication** — configure credentials for your AWS Marketplace seller account with permissions to create Lambda, API Gateway, S3, CloudFront, and IAM resources.
-
-```bash
-# Option A: AWS CLI profiles
+# Option A: Named profile
 aws configure --profile marketplace-seller
+export AWS_PROFILE=marketplace-seller
 
 # Option B: SSO
 aws sso login --profile marketplace-seller
+export AWS_PROFILE=marketplace-seller
 
 # Option C: Environment variables
 export AWS_ACCESS_KEY_ID=...
@@ -103,34 +98,37 @@ export AWS_SECRET_ACCESS_KEY=...
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
-Verify your identity:
+Verify:
 
 ```bash
 aws sts get-caller-identity --region us-east-1
 ```
 
-**6. Amazon Bedrock model access** — enable **Claude 3 Haiku** in **us-east-1** (used by the Listing Effectiveness Scorer).
+### Step 3: Clone and deploy
 
-Enable via the [Bedrock model access console](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess).
-
-**7. AWS Marketplace seller account** — your account must be [registered as a seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html).
-
-**8. A SaaS listing in Limited state** — required to run integration tests. The Listing Effectiveness Scorer works with any listing state.
-
-> All resources deploy to **us-east-1**. AWS Marketplace APIs are only available in this region.
-
-### Steps
-
-1. Clone this repository
-2. Build and deploy:
+**macOS / Linux:**
 
 ```bash
+git clone <repository-url>
+cd aws-marketplace-seller-toolkit
 make deploy
 ```
 
-This copies the frontend into the Lambda package, builds with SAM, and deploys. When prompted, confirm the changeset.
+**Windows (or without Make):**
 
-3. Open the **TestToolUrl** from the stack outputs in your browser.
+```bash
+git clone <repository-url>
+cd aws-marketplace-seller-toolkit
+copy frontend\index.html backend\index.html
+sam build --template-file infra/template.yaml
+sam deploy
+```
+
+When prompted, confirm the changeset. SAM packages the Lambda, deploys the stack, and automatically uploads the frontend.
+
+### Step 4: Open the toolkit
+
+The deploy outputs a **TestToolUrl** (CloudFront URL). Open it in your browser.
 
 ## Usage
 
@@ -143,8 +141,16 @@ This copies the frontend into the Lambda package, builds with SAM, and deploys. 
 
 ## Cleanup
 
+**macOS / Linux:**
+
 ```bash
-make clean
+make clean STACK_NAME=your-stack-name
+```
+
+**Windows (or without Make):**
+
+```bash
+sam delete --stack-name your-stack-name --region us-east-1 --no-prompts
 ```
 
 ## Cost Estimate
