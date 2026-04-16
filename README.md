@@ -92,6 +92,21 @@ sam deploy
 sam delete --stack-name aws-marketplace-seller-toolkit --region us-east-1
 ```
 
+## Cost Estimate
+
+This tool deploys into the seller's AWS account. With typical usage (a few test runs per day during integration development), costs are minimal:
+
+| Service | Usage | Estimated Cost |
+|---------|-------|---------------|
+| AWS Lambda | ~10-20 invocations/day, 256 MB, <60s each | Free tier (1M requests/month free) |
+| Amazon API Gateway (HTTP API) | ~10-20 requests/day | Free tier (1M requests/month free for 12 months) |
+| Amazon S3 | 1 HTML file (~50 KB) | < $0.01/month |
+| Amazon CloudFront | Low traffic (single user) | < $0.01/month |
+| Amazon Bedrock (Claude 3 Haiku) | ~2-3 calls per scoring run (input ~2K tokens, output ~1K tokens) | ~$0.01 per scoring run |
+| AWS CloudTrail | LookupEvents API calls (read-only) | Free (included with default trail) |
+
+Estimated total: under $1/month for typical development usage. The primary variable cost is Bedrock — each listing score uses 2-3 Haiku invocations. Delete the stack when not in use to avoid any ongoing charges.
+
 ## Project Structure
 
 ```
