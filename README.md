@@ -79,7 +79,7 @@ sam build --template-file infra/template.yaml
 sam deploy
 ```
 
-3. When prompted, confirm the changeset. SAM packages the Lambda, uploads it to S3, deploys the stack, and outputs the **TestToolUrl**.
+3. When prompted, confirm the changeset. SAM packages the Lambda, uploads it to S3, deploys the stack, deploys the frontend automatically, and outputs the **TestToolUrl**.
 
 4. Open the **TestToolUrl** in your browser.
 

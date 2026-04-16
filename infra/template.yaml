@@ -112,60 +112,14 @@ Resources:
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
 
   # ── Custom Resource: Deploy Frontend ───────────────────────────────────────
-
-  FrontendDeployFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: index.handler
-      Runtime: python3.12
-      Timeout: 60
-      Policies:
-        - Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action:
-                - s3:PutObject
-              Resource: !Sub "${FrontendBucket.Arn}/*"
-      InlineCode: |
-        import boto3
-        import cfnresponse
-        import urllib.request
-
-        def handler(event, context):
-            try:
-                if event['RequestType'] == 'Delete':
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                    return
-
-                props = event['ResourceProperties']
-                html_url = props['HtmlUrl']
-                dest_bucket = props['DestBucket']
-                api_endpoint = props['ApiEndpoint']
-
-                with urllib.request.urlopen(html_url) as resp:
-                    html = resp.read().decode('utf-8')
-                html = html.replace('__API_ENDPOINT__', api_endpoint)
-
-                s3 = boto3.client('s3')
-                s3.put_object(
-                    Bucket=dest_bucket,
-                    Key='index.html',
-                    Body=html.encode('utf-8'),
-                    ContentType='text/html',
-                )
-
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Status': 'Frontend deployed'})
-            except Exception as e:
-                print(f'Error: {e}')
-                cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+  # Uses the main Lambda to read index.html from its own package and upload to S3
 
   FrontendDeploy:
     Type: Custom::FrontendDeploy
     DependsOn:
       - FrontendBucketPolicy
     Properties:
-      ServiceToken: !GetAtt FrontendDeployFunction.Arn
-      HtmlUrl: !Sub "https://raw.githubusercontent.com/aws-samples/aws-marketplace-seller-toolkit/main/frontend/index.html"
+      ServiceToken: !GetAtt ToolkitFunction.Arn
       DestBucket: !Ref FrontendBucket
       ApiEndpoint: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/test"
 

@@ -529,6 +529,10 @@ def check_fulfillment_url_match(body):
 
 
 def lambda_handler(event, context):
+    # Handle CloudFormation custom resource events (frontend deploy)
+    if "RequestType" in event:
+        return _handle_cfn_event(event, context)
+
     body = json.loads(event.get("body", "{}"))
     action = body.get("action")
 
@@ -1825,6 +1829,41 @@ Be direct and specific. Do not use bullet points. Do not mention AWS Marketplace
         "keywords": keywords,
         "debug_keys": top_keys,
     }
+
+
+def _handle_cfn_event(event, context):
+    """Handle CloudFormation custom resource events for frontend deployment."""
+    import cfnresponse
+    import os
+
+    try:
+        if event["RequestType"] == "Delete":
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            return
+
+        props = event["ResourceProperties"]
+        dest_bucket = props["DestBucket"]
+        api_endpoint = props["ApiEndpoint"]
+
+        # Read index.html from the Lambda package (same directory as handler.py)
+        html_path = os.path.join(os.path.dirname(__file__), "index.html")
+        with open(html_path, "r") as f:
+            html = f.read()
+
+        html = html.replace("__API_ENDPOINT__", api_endpoint)
+
+        s3 = boto3.client("s3")
+        s3.put_object(
+            Bucket=dest_bucket,
+            Key="index.html",
+            Body=html.encode("utf-8"),
+            ContentType="text/html",
+        )
+
+        cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Status": "Frontend deployed"})
+    except Exception as e:
+        print(f"Error: {e}")
+        cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
 
 
 def respond(status, body):
