@@ -1,8 +1,10 @@
-# AWS Marketplace SaaS Integration Tester
+# AWS Marketplace Seller Toolkit
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
 
-A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and listing effectiveness before MCO (Marketplace Channel Operations) review. Deploys into the seller's own AWS account via CloudFormation.
+> This is a sample solution and is not intended for production use. It is provided as-is and should be thoroughly reviewed and tested before use in any environment. Use at your own risk.
+
+A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and score listing effectiveness. Deploys into the seller's own AWS account via AWS SAM.
 
 ## Features
 
@@ -126,10 +128,10 @@ CONTRIBUTING.md       Contribution guidelines
 
 ## Security
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
 This tool deploys resources into your AWS account. Review the IAM permissions in `infra/template.yaml` before deploying.
 
 ## License
 
-This project is licensed under the Apache 2.0 License. See [LICENSE](LICENSE).
+This library is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file.
