@@ -113,6 +113,7 @@ infra/
   template.yaml       SAM template (Lambda, API Gateway, S3, CloudFront, IAM)
 samconfig.toml        SAM deploy defaults (stack name, region, capabilities)
 ARCHITECTURE.md       Architecture overview and IAM permissions
+API_REFERENCE.md      API calls and service integrations
 CONTRIBUTING.md       Contribution guidelines
 ```
 
