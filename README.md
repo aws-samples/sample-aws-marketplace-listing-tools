@@ -75,11 +75,10 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 2. Build and deploy:
 
 ```bash
-sam build --template-file infra/template.yaml
-sam deploy
+make deploy
 ```
 
-3. When prompted, confirm the changeset. SAM packages the Lambda, uploads it to S3, deploys the stack, deploys the frontend automatically, and outputs the **TestToolUrl**.
+This copies the frontend into the Lambda package, builds with SAM, and deploys. When prompted, confirm the changeset.
 
 4. Open the **TestToolUrl** in your browser.
 
@@ -95,7 +94,7 @@ sam deploy
 ## Cleanup
 
 ```bash
-sam delete --stack-name aws-marketplace-seller-toolkit --region us-east-1
+make clean
 ```
 
 ## Cost Estimate
