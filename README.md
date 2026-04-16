@@ -65,7 +65,7 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 - An AWS account [registered as a Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
 - Amazon Bedrock model access for **Claude 3 Haiku** in us-east-1 — [enable here](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
 - A SaaS listing in **Limited** state (for integration tests; the scorer works with any listing state)
-- IAM permissions to deploy CloudFormation stacks (`AdministratorAccess` or equivalent). See [ARCHITECTURE.md](ARCHITECTURE.md#iam-permissions) for the minimum required permissions.
+- IAM permissions to deploy CloudFormation stacks. See [ARCHITECTURE.md](ARCHITECTURE.md#iam-permissions) for the minimum required policy.
 
 - [Authenticated AWS CLI session](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html) for your Marketplace seller account in **us-east-1**. Verify with `aws sts get-caller-identity --region us-east-1`
 

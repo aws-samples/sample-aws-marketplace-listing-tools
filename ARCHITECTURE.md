@@ -196,18 +196,128 @@ For workshop distribution:
 
 ### Deploying user/role
 
-The user or role running `sam deploy` needs permissions to create and manage the following AWS resources:
+The user or role running `sam deploy` needs the following least-privilege policy. Attach this to your IAM user or role before deploying:
 
-| Service | Actions | Purpose |
-|---------|---------|---------|
-| CloudFormation | `cloudformation:*` | Create/update/delete stacks |
-| Lambda | `lambda:*` | Create functions and permissions |
-| API Gateway | `apigateway:*` | Create HTTP API |
-| S3 | `s3:*` | Create bucket, upload frontend |
-| CloudFront | `cloudfront:*` | Create distribution and OAC |
-| IAM | `iam:CreateRole`, `iam:PutRolePolicy`, `iam:AttachRolePolicy`, `iam:PassRole`, `iam:DeleteRole`, `iam:DeleteRolePolicy`, `iam:DetachRolePolicy` | Create Lambda execution roles |
-
-`AdministratorAccess` or `PowerUserAccess` with IAM permissions covers all of the above.
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudFormation",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:GetTemplate",
+        "cloudformation:ListStackResources",
+        "cloudformation:CreateChangeSet",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:DeleteChangeSet"
+      ],
+      "Resource": "arn:aws:cloudformation:us-east-1:*:stack/aws-marketplace-seller-toolkit*/*"
+    },
+    {
+      "Sid": "Lambda",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:AddPermission",
+        "lambda:RemovePermission",
+        "lambda:InvokeFunction",
+        "lambda:TagResource",
+        "lambda:ListTags"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:*:function:aws-marketplace-seller-toolkit*"
+    },
+    {
+      "Sid": "APIGateway",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:POST",
+        "apigateway:GET",
+        "apigateway:PATCH",
+        "apigateway:DELETE",
+        "apigateway:PUT"
+      ],
+      "Resource": "arn:aws:apigateway:us-east-1::*"
+    },
+    {
+      "Sid": "S3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:GetBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::aws-marketplace-seller-toolkit*",
+        "arn:aws:s3:::aws-marketplace-seller-toolkit*/*",
+        "arn:aws:s3:::aws-sam-cli-managed-default-*",
+        "arn:aws:s3:::aws-sam-cli-managed-default-*/*"
+      ]
+    },
+    {
+      "Sid": "CloudFront",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:TagResource",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:GetOriginAccessControl"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAM",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PassRole",
+        "iam:TagRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/aws-marketplace-seller-toolkit*"
+    },
+    {
+      "Sid": "SAMBucketManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::aws-sam-cli-managed-default-*"
+    }
+  ]
+}
+```
 
 ### Lambda execution role (created by the template)
 
