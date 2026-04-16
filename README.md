@@ -60,12 +60,62 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 ## Deploy
 
 ### Prerequisites
-- AWS CLI and [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) installed
-- Python 3 and pip3
-- AWS CLI configured with credentials for your AWS Marketplace seller account
-- Account registered as an [AWS Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
-- Amazon Bedrock model access enabled for **Claude 3 Haiku** in **us-east-1** (used by the Listing Effectiveness Scorer). Enable via the [Bedrock console](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
-- A SaaS listing in **Limited** state (required to run integration tests)
+
+**1. AWS CLI** — [Install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+
+```bash
+aws --version
+# Requires: aws-cli/2.x or later
+```
+
+**2. AWS SAM CLI** — [Install guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+
+```bash
+sam --version
+# Requires: SAM CLI 1.x or later
+```
+
+**3. Python 3** (required by SAM to build the Lambda)
+
+```bash
+python3 --version
+# Requires: Python 3.9 or later
+```
+
+**4. Make** (included on macOS and Linux; Windows users can use `sam build && sam deploy` directly)
+
+```bash
+make --version
+```
+
+**5. AWS authentication** — configure credentials for your AWS Marketplace seller account with permissions to create Lambda, API Gateway, S3, CloudFront, and IAM resources.
+
+```bash
+# Option A: AWS CLI profiles
+aws configure --profile marketplace-seller
+
+# Option B: SSO
+aws sso login --profile marketplace-seller
+
+# Option C: Environment variables
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=us-east-1
+```
+
+Verify your identity:
+
+```bash
+aws sts get-caller-identity --region us-east-1
+```
+
+**6. Amazon Bedrock model access** — enable **Claude 3 Haiku** in **us-east-1** (used by the Listing Effectiveness Scorer).
+
+Enable via the [Bedrock model access console](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess).
+
+**7. AWS Marketplace seller account** — your account must be [registered as a seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html).
+
+**8. A SaaS listing in Limited state** — required to run integration tests. The Listing Effectiveness Scorer works with any listing state.
 
 > All resources deploy to **us-east-1**. AWS Marketplace APIs are only available in this region.
 
@@ -80,7 +130,7 @@ make deploy
 
 This copies the frontend into the Lambda package, builds with SAM, and deploys. When prompted, confirm the changeset.
 
-4. Open the **TestToolUrl** in your browser.
+3. Open the **TestToolUrl** from the stack outputs in your browser.
 
 ## Usage
 
