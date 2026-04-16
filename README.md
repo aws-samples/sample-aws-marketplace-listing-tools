@@ -62,7 +62,6 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) v2 or later
 - [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) v1 or later
 - [Python 3.9+](https://www.python.org/downloads/) (required by SAM to build the Lambda)
-- [Make](https://www.gnu.org/software/make/) (included on macOS/Linux; optional on Windows)
 - An AWS account [registered as a Marketplace seller](https://docs.aws.amazon.com/marketplace/latest/userguide/seller-registration-process.html)
 - Amazon Bedrock model access for **Claude 3 Haiku** in us-east-1 — [enable here](https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/modelaccess)
 - A SaaS listing in **Limited** state (for integration tests; the scorer works with any listing state)
@@ -105,20 +104,9 @@ aws sts get-caller-identity --region us-east-1
 
 ### Step 3: Clone and deploy
 
-**macOS / Linux:**
-
 ```bash
 git clone <repository-url>
 cd aws-marketplace-seller-toolkit
-make deploy
-```
-
-**Windows (or without Make):**
-
-```bash
-git clone <repository-url>
-cd aws-marketplace-seller-toolkit
-copy frontend\index.html backend\index.html
 sam build --template-file infra/template.yaml
 sam deploy
 ```
@@ -140,16 +128,8 @@ The deploy outputs a **TestToolUrl** (CloudFront URL). Open it in your browser.
 
 ## Cleanup
 
-**macOS / Linux:**
-
 ```bash
-make clean STACK_NAME=your-stack-name
-```
-
-**Windows (or without Make):**
-
-```bash
-sam delete --stack-name your-stack-name --region us-east-1 --no-prompts
+sam delete --stack-name your-stack-name --region us-east-1
 ```
 
 ## Cost Estimate
