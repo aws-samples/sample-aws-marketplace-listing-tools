@@ -67,6 +67,8 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 - A SaaS listing in **Limited** state (for integration tests; the scorer works with any listing state)
 - IAM permissions to deploy CloudFormation stacks (`AdministratorAccess` or equivalent). See [ARCHITECTURE.md](ARCHITECTURE.md#iam-permissions) for the minimum required permissions.
 
+- [Authenticated AWS CLI session](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html) for your Marketplace seller account in **us-east-1**. Verify with `aws sts get-caller-identity --region us-east-1`
+
 > All resources deploy to **us-east-1**. AWS Marketplace APIs are only available in this region.
 
 ## Getting Started
@@ -79,30 +81,7 @@ sam --version          # Requires: SAM CLI 1.x
 python3 --version      # Requires: Python 3.9+
 ```
 
-### Step 2: Authenticate to your AWS account
-
-```bash
-# Option A: Named profile
-aws configure --profile marketplace-seller
-export AWS_PROFILE=marketplace-seller
-
-# Option B: SSO
-aws sso login --profile marketplace-seller
-export AWS_PROFILE=marketplace-seller
-
-# Option C: Environment variables
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_DEFAULT_REGION=us-east-1
-```
-
-Verify:
-
-```bash
-aws sts get-caller-identity --region us-east-1
-```
-
-### Step 3: Clone and deploy
+### Step 2: Clone and deploy
 
 ```bash
 git clone <repository-url>
@@ -113,7 +92,7 @@ sam deploy
 
 When prompted, confirm the changeset. SAM packages the Lambda, deploys the stack, and automatically uploads the frontend.
 
-### Step 4: Open the toolkit
+### Step 3: Open the toolkit
 
 The deploy outputs a **TestToolUrl** (CloudFront URL). Open it in your browser.
 
