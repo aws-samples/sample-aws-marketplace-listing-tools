@@ -191,3 +191,37 @@ For workshop distribution:
 1. Uploads `function.zip`, `template.yaml`, and `index.html` to a team-owned S3 bucket
 2. Patches the Launch Stack URL into the workshop markdown
 3. Prints the Launch Stack URL for embedding in the workshop lab page
+
+## IAM Permissions
+
+### Deploying user/role
+
+The user or role running `sam deploy` needs permissions to create and manage the following AWS resources:
+
+| Service | Actions | Purpose |
+|---------|---------|---------|
+| CloudFormation | `cloudformation:*` | Create/update/delete stacks |
+| Lambda | `lambda:*` | Create functions and permissions |
+| API Gateway | `apigateway:*` | Create HTTP API |
+| S3 | `s3:*` | Create bucket, upload frontend |
+| CloudFront | `cloudfront:*` | Create distribution and OAC |
+| IAM | `iam:CreateRole`, `iam:PutRolePolicy`, `iam:AttachRolePolicy`, `iam:PassRole`, `iam:DeleteRole`, `iam:DeleteRolePolicy`, `iam:DetachRolePolicy` | Create Lambda execution roles |
+
+`AdministratorAccess` or `PowerUserAccess` with IAM permissions covers all of the above.
+
+### Lambda execution role (created by the template)
+
+The template creates a Lambda execution role with these permissions:
+
+| Action | Purpose |
+|--------|---------|
+| `aws-marketplace:ResolveCustomer` | Exchange registration token for customer identifier |
+| `aws-marketplace:GetEntitlements` | Check buyer entitlements (guidance step) |
+| `aws-marketplace:BatchMeterUsage` | Submit usage records (guidance step) |
+| `aws-marketplace:DescribeEntity` | Fetch listing details for scoring |
+| `aws-marketplace:ListEntities` | List offers for pricing detection |
+| `bedrock:InvokeModel` | AI scoring and rewrite suggestions |
+| `events:ListRules` | Check EventBridge configuration |
+| `cloudtrail:LookupEvents` | Verify ResolveCustomer/metering history |
+| `sts:GetCallerIdentity` | Self-identify for CloudTrail filtering |
+| `s3:PutObject`, `s3:GetObject` | Upload frontend to S3 bucket |
