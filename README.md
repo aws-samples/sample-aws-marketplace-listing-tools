@@ -104,22 +104,6 @@ This tool deploys into the seller's AWS account. With typical usage (a few test 
 
 Estimated total: under $1/month for typical development usage. The primary variable cost is Bedrock — each listing score uses 2-3 Haiku invocations. Delete the stack when not in use to avoid any ongoing charges.
 
-## Project Structure
-
-```
-backend/
-  handler.py          Lambda function (integration tests + scorer)
-  requirements.txt    Python dependencies
-frontend/
-  index.html          Single-page UI (no build step)
-infra/
-  template.yaml       SAM template (Lambda, API Gateway, S3, CloudFront, IAM)
-samconfig.toml        SAM deploy defaults (stack name, region, capabilities)
-ARCHITECTURE.md       Architecture overview and IAM permissions
-API_REFERENCE.md      API calls and service integrations
-CONTRIBUTING.md       Contribution guidelines
-```
-
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.

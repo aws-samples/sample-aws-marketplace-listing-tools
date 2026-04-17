@@ -44,6 +44,22 @@ Looking at the existing issues is a great way to find something to contribute on
 GitHub issue labels (enhancement/bug/duplicate/help wanted/invalid/question/wontfix), looking at any 'help wanted' issues is a
 great place to start.
 
+## Project Structure
+
+```
+backend/
+  handler.py          Lambda function (integration tests + scorer)
+  requirements.txt    Python dependencies
+frontend/
+  index.html          Single-page UI (no build step)
+infra/
+  template.yaml       SAM template (Lambda, API Gateway, S3, CloudFront, IAM)
+samconfig.toml        SAM deploy defaults (stack name, region, capabilities)
+ARCHITECTURE.md       Architecture overview and IAM permissions
+API_REFERENCE.md      API calls and service integrations
+CONTRIBUTING.md       Contribution guidelines
+```
+
 ## Code of Conduct
 
 This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
