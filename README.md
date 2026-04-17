@@ -8,23 +8,27 @@ A self-service tool for AWS Marketplace SaaS sellers to validate listing integra
 
 ## Problem
 
-Sellers submitting SaaS listings for review often discover integration issues only after submission, adding days or weeks to time-to-live. Common failures include registration pages not accepting POST tokens, missing ResolveCustomer calls, metering dimension mismatches, and missing EventBridge configuration. This toolkit lets sellers find and fix these issues before submission.
+SaaS sellers lose days (sometimes weeks) when their listing fails Marketplace Operations (MCO) review. Most failures are preventable: a registration page that doesn't accept POST tokens, a missing ResolveCustomer call, EventBridge not configured. Sellers have no way to check these before submitting.
+
+Listing quality is equally important. 30% of Marketplace traffic comes from search, and 60% of clicks go to first-page results. Poorly optimised titles, missing keywords, and no free trial directly reduce discoverability and conversion. Most sellers don't know what "good" looks like until a Partner SA reviews their listing.
+
+This toolkit gives sellers two things:
+- **Integration Tests** — validate your SaaS integrations against a live Limited listing before MCO submission
+- **Listing Effectiveness Scorer** — AI-powered scoring across 12 categories with product-led growth (PLG) recommendations to improve search ranking, conversion, and buyer experience
 
 ## Features
 
 ### Integration Tests
-Validates SaaS integrations against a live Limited listing before submission. Catches common review failures: registration page not accepting POST tokens, missing ResolveCustomer calls, EventBridge not configured, and Concurrent Agreements not enabled. Includes code examples for GetEntitlements and BatchMeterUsage integration, plus CloudTrail history checks to verify your backend is calling the APIs correctly.
+Validates SaaS integrations against a live Limited listing before MCO submission. Catches the most common review failures: registration page not accepting POST tokens, missing ResolveCustomer calls, EventBridge not configured, and Concurrent Agreements not enabled. Includes code examples for GetEntitlements and BatchMeterUsage, plus CloudTrail history checks to verify your backend is calling the APIs correctly.
 
 ### Listing Effectiveness Scorer
-AI-powered scoring across 12 weighted categories with Amazon Bedrock (Claude):
-- Content quality: Title, Short Description, Highlights (scored against a structured rubric with 4 bands)
-- Discoverability: Search Keywords, Title SEO, Categories
-- Media: Screenshots and videos
-- Pricing: Free Trial, Pay-As-You-Go, Contract Pricing
-- Support information completeness
-- Product-aware evaluation tailored to your listing's industry and audience
-- Per-highlight feedback identifying which bullet points need improvement
-- AI-generated executive summary and rewrite suggestions per field
+AI-powered scoring (Amazon Bedrock, Claude) across 12 weighted categories aligned to PLG best practices:
+- **Content** — Title, Short Description, Highlights scored against a 4-band rubric (Needs Attention → Optimised)
+- **Discoverability** — Search Keywords, Title SEO, Categories
+- **Media** — Screenshots and video presence
+- **Pricing & Trials** — Free Trial, Pay-As-You-Go, Contract Pricing
+- **Support** — Contact information completeness
+- Per-highlight feedback, product-aware evaluation, AI-generated rewrites per field
 
 > **Note:** Scores are AI-generated guidance for improving listing discoverability and conversion. Recommendations are based on AWS Marketplace listing guidelines and PLG best practices. AI-generated rewrites (powered by Amazon Bedrock) should be reviewed before use.
 
