@@ -8,27 +8,26 @@ A self-service tool for AWS Marketplace SaaS sellers to validate listing integra
 
 ## Problem
 
-SaaS sellers lose days (sometimes weeks) when their listing fails Marketplace Operations (MCO) review. Most failures are preventable: a registration page that doesn't accept POST tokens, a missing ResolveCustomer call, EventBridge not configured. Sellers have no way to check these before submitting.
+Getting your SaaS listing through Marketplace Operations (MCO) review can take days or weeks if something fails. Most failures are things you can catch yourself: your registration page not accepting the marketplace token, a missing API call, or EventBridge not wired up. But today there's no easy way to test these before you submit.
 
-Listing quality is equally important. 30% of Marketplace traffic comes from search, and 60% of clicks go to first-page results. Poorly optimised titles, missing keywords, and no free trial directly reduce discoverability and conversion. Most sellers don't know what "good" looks like until a Partner SA reviews their listing.
+Your listing also needs to work hard for you once it's live. 30% of buyers find products through Marketplace search, and 60% of clicks go to first-page results. If your title isn't optimised, your keywords are weak, or you don't offer a free trial, buyers won't find you. This toolkit helps you fix both problems:
 
-This toolkit gives sellers two things:
-- **Integration Tests** — validate your SaaS integrations against a live Limited listing before MCO submission
-- **Listing Effectiveness Scorer** — AI-powered scoring across 12 categories with product-led growth (PLG) recommendations to improve search ranking, conversion, and buyer experience
+- **Integration Tests** — run the same checks MCO runs, against your live Limited listing, before you submit
+- **Listing Effectiveness Scorer** — get an AI-powered score across 12 categories with actionable recommendations to improve your search ranking, conversion, and buyer experience
 
 ## Features
 
 ### Integration Tests
-Validates SaaS integrations against a live Limited listing before MCO submission. Catches the most common review failures: registration page not accepting POST tokens, missing ResolveCustomer calls, EventBridge not configured, and Concurrent Agreements not enabled. Includes code examples for GetEntitlements and BatchMeterUsage, plus CloudTrail history checks to verify your backend is calling the APIs correctly.
+Run automated checks against your live Limited listing before submitting for MCO review. The toolkit validates your registration page, token exchange, CloudTrail history, error handling, EventBridge configuration, and Concurrent Agreements. Where it can't test directly (GetEntitlements, BatchMeterUsage), it provides code examples and checks CloudTrail to confirm your backend is making the right calls.
 
 ### Listing Effectiveness Scorer
-AI-powered scoring (Amazon Bedrock, Claude) across 12 weighted categories aligned to PLG best practices:
-- **Content** — Title, Short Description, Highlights scored against a 4-band rubric (Needs Attention → Optimised)
+Get an AI-generated score for your listing across 12 weighted categories, with specific recommendations to improve discoverability and conversion:
+- **Content** — Title, Short Description, Highlights scored on a 4-band scale (Needs Attention → Optimised)
 - **Discoverability** — Search Keywords, Title SEO, Categories
 - **Media** — Screenshots and video presence
-- **Pricing & Trials** — Free Trial, Pay-As-You-Go, Contract Pricing
+- **Pricing & Trials** — Free Trial, Pay-As-You-Go, Contract options
 - **Support** — Contact information completeness
-- Per-highlight feedback, product-aware evaluation, AI-generated rewrites per field
+- Per-highlight feedback, product-aware evaluation, and AI-generated rewrites you can copy straight into your listing
 
 > **Note:** Scores are AI-generated guidance for improving listing discoverability and conversion. Recommendations are based on AWS Marketplace listing guidelines and PLG best practices. AI-generated rewrites (powered by Amazon Bedrock) should be reviewed before use.
 
