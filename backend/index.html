@@ -115,11 +115,12 @@
     <div id="apiEndpointHint" style="font-size:12px;color:#1d8348;margin:-10px 0 14px;display:none">✓ API endpoint configured automatically</div>
 
     <label>Product Code</label>
+    <p class="hint">Find this in <a href="https://partnercentral.awspartner.com/partnercentral2/s/AMPProducts" target="_blank" style="color:#0073bb">Partner Central</a> → your product → Product Summary → Product Code</p>
     <input type="text" id="productCode" placeholder="e.g. abc1defghij2kl3mno4pqrst5" onblur="detectListingType()" />
     <div id="detectResult" style="font-size:12px;margin:-10px 0 14px;min-height:16px"></div>
 
     <label>Full Registration Redirect URL</label>
-    <p class="hint">The complete URL your browser landed on after subscribing — includes the marketplace token as a query parameter</p>
+    <p class="hint">Subscribe to your own listing using a test buyer account. After clicking <b>Set up your account</b>, you'll be redirected to your registration page. Copy the full URL from your browser's address bar — it contains the <code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:11px">x-amzn-marketplace-token</code> parameter.</p>
     <input type="text" id="redirectUrl" placeholder="https://yourapp.com/register?x-amzn-marketplace-token=eyJ..." oninput="extractToken()" />
     <div id="tokenPreview"></div>
 
