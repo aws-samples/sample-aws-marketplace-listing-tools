@@ -8,7 +8,7 @@ A self-service tool for AWS Marketplace SaaS sellers to validate listing integra
 
 ## Problem
 
-Publishing a SaaS product on AWS Marketplace requires a registration page that integrates with the Marketplace APIs (ResolveCustomer, GetEntitlements, BatchMeterUsage). These integrations are reviewed by Marketplace Operations before your listing can go public. If something isn't right, you'll be sent back to fix it, adding days or weeks to your launch.
+Publishing a SaaS product on AWS Marketplace requires a registration page that integrates with the Marketplace APIs (ResolveCustomer, GetEntitlements, BatchMeterUsage). These integrations are reviewed by Marketplace Operations before your listing can go public. Integration issues discovered during review require resubmission, which can delay your listing going live.
 
 This toolkit gives you instant feedback on your integrations so you can find and fix issues before you submit for review. It also scores your listing content against product-led growth (PLG) best practices, helping you improve discoverability and conversion from day one.
 
