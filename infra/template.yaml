@@ -12,14 +12,19 @@ Resources:
 
   # ── Lambda ──────────────────────────────────────────────────────────────────
 
+  # CKV_AWS_116: DLQ not applicable — Lambda is invoked synchronously via API Gateway
+  # CKV_AWS_117 / W89: VPC intentionally omitted — Lambda needs internet access for Marketplace APIs and Bedrock; VPC would require NAT Gateway adding cost with no security benefit
   ToolkitFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: handler.lambda_handler
       CodeUri: ../backend/
+      ReservedConcurrentExecutions: 10
       Policies:
         - Version: "2012-10-17"
           Statement:
+            # W11: Resource "*" required — Marketplace APIs, Bedrock, EventBridge, and CloudTrail
+            # do not support resource-level permissions
             - Effect: Allow
               Action:
                 - aws-marketplace:ResolveCustomer
@@ -51,6 +56,10 @@ Resources:
   Api:
     Type: AWS::Serverless::HttpApi
     Properties:
+      StageName: $default
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","path":"$context.path","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
       CorsConfiguration:
         AllowOrigins:
           - "*"
@@ -60,11 +69,23 @@ Resources:
         AllowHeaders:
           - Content-Type
 
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/${AWS::StackName}"
+      RetentionInDays: 30
+
   # ── Frontend S3 + CloudFront ─────────────────────────────────────────────────
 
+  # CKV_AWS_18 / W35: Access logging intentionally omitted for this sample tool
+  # CKV_AWS_21: Versioning intentionally omitted for this sample tool — bucket contains only a single generated index.html
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -95,6 +116,8 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
+  # CKV_AWS_86 / W10: CloudFront access logging intentionally omitted for this sample tool
+  # CKV_AWS_68: WAF intentionally omitted for this sample tool — adds cost with no benefit for a static frontend
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -110,6 +133,9 @@ Resources:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+          MinimumProtocolVersion: TLSv1.2_2021
 
   # ── Custom Resource: Deploy Frontend ───────────────────────────────────────
   # Uses the main Lambda to read index.html from its own package and upload to S3

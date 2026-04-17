@@ -541,7 +541,7 @@ def lambda_handler(event, context):
         "get_entitlements": get_entitlements,
         "meter_usage": meter_usage,
         "check_registration_page": check_registration_page,
-        "check_resolve_customer_causality": check_resolve_customer_causality,
+
         "check_registration_error_handling": check_registration_error_handling,
         "score_listing": score_listing,
         "rewrite_field": rewrite_field,
@@ -701,7 +701,7 @@ def check_registration_page(body):
 
     # Step 1: POST with token in form body (matches real Marketplace flow)
     try:
-        post_resp = requests.post(
+        post_resp = requests.post(  # nosemgrep: use-raise-for-status
             url,
             data={"x-amzn-marketplace-token": token},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -725,7 +725,7 @@ def check_registration_page(body):
     legacy_get = None
     try:
         get_url = f"{url}?x-amzn-marketplace-token={token}"
-        get_resp = requests.get(get_url, timeout=10, allow_redirects=True)
+        get_resp = requests.get(get_url, timeout=10, allow_redirects=True)  # nosemgrep: use-raise-for-status
         legacy_get = {
             "status_code": get_resp.status_code,
             "note": f"GET {'also works' if get_resp.status_code < 400 else f'returned {get_resp.status_code}'}",
@@ -748,112 +748,6 @@ def check_registration_page(body):
     return post_result
 
 
-def check_resolve_customer_causality(body):
-    url = body.get("registration_page_url")
-    token = body.get("registration_token")
-
-    if not url or not token:
-        return {"pass": False, "error": "registration_page_url and registration_token are required"}
-
-    import datetime
-    import time
-
-    # Step 1: Get own ARN for exclusion
-    sts = boto3.client("sts", region_name="us-east-1")
-    own_arn = sts.get_caller_identity().get("Arn", "")
-
-    ct = boto3.client("cloudtrail", region_name="us-east-1")
-
-    # Step 2: Record pre-POST event count
-    pre_time = datetime.datetime.utcnow()
-    pre_resp = ct.lookup_events(
-        LookupAttributes=[{"AttributeKey": "EventName", "AttributeValue": "ResolveCustomer"}],
-        StartTime=pre_time - datetime.timedelta(minutes=10),
-        MaxResults=50,
-    )
-    pre_events = [e for e in pre_resp.get("Events", [])
-                  if own_arn not in json.loads(e.get("CloudTrailEvent", "{}"))
-                  .get("userIdentity", {}).get("arn", "")]
-    pre_count = len(pre_events)
-
-    # Step 3: POST the token to the registration page
-    try:
-        requests.post(
-            url,
-            data={"x-amzn-marketplace-token": token},
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=10,
-            allow_redirects=True,
-        )
-    except Exception:
-        pass  # We still check CloudTrail even if POST fails
-
-    # Step 4: Wait for CloudTrail propagation
-    time.sleep(5)
-
-    # Step 5: Query CloudTrail for events after the POST
-    post_time = datetime.datetime.utcnow()
-    post_resp = ct.lookup_events(
-        LookupAttributes=[{"AttributeKey": "EventName", "AttributeValue": "ResolveCustomer"}],
-        StartTime=pre_time - datetime.timedelta(minutes=10),
-        MaxResults=50,
-    )
-    post_events = [e for e in post_resp.get("Events", [])
-                   if own_arn not in json.loads(e.get("CloudTrailEvent", "{}"))
-                   .get("userIdentity", {}).get("arn", "")]
-    post_count = len(post_events)
-
-    # Step 6: Check for new events (causality signal)
-    new_events = post_count - pre_count
-    causality_confirmed = new_events > 0
-
-    result = {
-        "pass": causality_confirmed,
-        "causality_confirmed": causality_confirmed,
-        "time_window_seconds": int((post_time - pre_time).total_seconds()) + 600,
-        "events_in_window": post_count,
-        "pre_count": pre_count,
-        "post_count": post_count,
-    }
-
-    if causality_confirmed:
-        result["note"] = (f"ResolveCustomer call detected — {new_events} new call(s) appeared "
-                         f"after submitting the token to your registration page.")
-    else:
-        result["note"] = (
-            "No new ResolveCustomer call detected after submitting the token to your registration page. "
-            "Note: CloudTrail events can take 5-15 minutes to appear. "
-            "If this just failed, wait a few minutes and re-run. "
-            "Your backend must call ResolveCustomer immediately when a buyer POSTs the token."
-        )
-        result["code_example"] = {
-            "python": (
-                "import boto3\n\n"
-                "client = boto3.client('meteringmarketplace', region_name='us-east-1')\n\n"
-                "# Call this in your registration page POST handler\n"
-                "# token = request.POST.get('x-amzn-marketplace-token')\n"
-                "response = client.resolve_customer(RegistrationToken=token)\n\n"
-                "customer_id = response['CustomerIdentifier']\n"
-                "account_id = response['CustomerAWSAccountId']\n"
-                "product_code = response['ProductCode']\n\n"
-                "# Store these in your database for entitlement and metering"
-            ),
-            "nodejs": (
-                "const { MarketplaceMeteringClient, ResolveCustomerCommand } = "
-                "require('@aws-sdk/client-marketplace-metering');\n\n"
-                "const client = new MarketplaceMeteringClient({ region: 'us-east-1' });\n\n"
-                "// Call this in your registration page POST handler\n"
-                "// const token = req.body['x-amzn-marketplace-token'];\n"
-                "const response = await client.send(new ResolveCustomerCommand({\n"
-                "  RegistrationToken: token\n"
-                "}));\n\n"
-                "const { CustomerIdentifier, CustomerAWSAccountId, ProductCode } = response;\n"
-                "// Store these in your database for entitlement and metering"
-            ),
-        }
-
-    return result
-
 
 # ── Stack trace patterns for error handling check ────────────────────────────
 
@@ -873,10 +767,10 @@ def check_registration_error_handling(body):
     if not url:
         return {"pass": False, "error": "registration_page_url is required"}
 
-    invalid_token = "test-invalid-token-00000"
+    invalid_token = "test-invalid-token-00000"  # nosec B105
 
     try:
-        resp = requests.post(
+        resp = requests.post(  # nosemgrep: use-raise-for-status
             url,
             data={"x-amzn-marketplace-token": invalid_token},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -1068,7 +962,7 @@ def check_resolve_customer_history(body):
         if not external_events:
             return {
                 "pass": False,
-                "note": "No ResolveCustomer calls found from your application in the last 7 days. Your backend must call ResolveCustomer immediately when a buyer lands on your registration page. Tip: run the 'ResolveCustomer Causality' check to verify your registration page triggers a ResolveCustomer call in real time.",
+                "note": "No ResolveCustomer calls found from your application in the last 7 days. Your backend must call ResolveCustomer immediately when a buyer lands on your registration page.",
                 "count": 0,
                 "code_example": {
                     "python": """import boto3
@@ -1280,7 +1174,7 @@ def detect_listing_type(body):
                             entity_id = eid
                             break
                     except Exception:
-                        continue
+                        continue  # nosec B112
                 if entity_id:
                     break
 
@@ -1813,7 +1707,7 @@ Be direct and specific. Do not use bullet points. Do not mention AWS Marketplace
         )
         summary = json.loads(resp["body"].read())["content"][0]["text"].strip()
     except Exception:
-        pass
+        pass  # nosec B110
 
     return {
         "pass": True,
@@ -1849,7 +1743,7 @@ def _handle_cfn_event(event, context):
             "Data": data,
         }).encode("utf-8")
         req = urllib.request.Request(response_url, data=body, headers={"Content-Type": ""}, method="PUT")
-        urllib.request.urlopen(req)
+        urllib.request.urlopen(req)  # nosemgrep: dynamic-urllib-use-detected  # nosec B310
 
     try:
         if event["RequestType"] == "Delete":
@@ -1861,7 +1755,7 @@ def _handle_cfn_event(event, context):
         api_endpoint = props["ApiEndpoint"]
 
         html_path = os.path.join(os.path.dirname(__file__), "index.html")
-        with open(html_path, "r") as f:
+        with open(html_path, "r", encoding="utf-8") as f:
             html = f.read()
 
         html = html.replace("__API_ENDPOINT__", api_endpoint)
@@ -1880,7 +1774,7 @@ def _handle_cfn_event(event, context):
         try:
             send_response("FAILED", {"Error": str(e)})
         except Exception:
-            pass
+            pass  # nosec B110
 
 
 def respond(status, body):
