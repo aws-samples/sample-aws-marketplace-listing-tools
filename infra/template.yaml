@@ -12,10 +12,21 @@ Resources:
 
   # ── Lambda ──────────────────────────────────────────────────────────────────
 
-  # CKV_AWS_116: DLQ not applicable — Lambda is invoked synchronously via API Gateway
-  # CKV_AWS_117 / W89: VPC intentionally omitted — Lambda needs internet access for Marketplace APIs and Bedrock; VPC would require NAT Gateway adding cost with no security benefit
   ToolkitFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      checkov:
+        skip:
+          - id: "CKV_AWS_116"
+            comment: "DLQ not applicable — Lambda is invoked synchronously via API Gateway"
+          - id: "CKV_AWS_117"
+            comment: "VPC intentionally omitted — Lambda needs internet access for Marketplace APIs and Bedrock; VPC would require NAT Gateway adding cost with no security benefit"
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "VPC intentionally omitted — Lambda needs internet access for Marketplace APIs and Bedrock; VPC would require NAT Gateway adding cost with no security benefit"
+          - id: W11
+            reason: "Resource * required — Marketplace APIs, Bedrock, EventBridge, and CloudTrail do not support resource-level permissions"
     Properties:
       Handler: handler.lambda_handler
       CodeUri: ../backend/
@@ -23,8 +34,6 @@ Resources:
       Policies:
         - Version: "2012-10-17"
           Statement:
-            # W11: Resource "*" required — Marketplace APIs, Bedrock, EventBridge, and CloudTrail
-            # do not support resource-level permissions
             - Effect: Allow
               Action:
                 - aws-marketplace:ResolveCustomer
@@ -71,16 +80,34 @@ Resources:
 
   ApiAccessLogGroup:
     Type: AWS::Logs::LogGroup
+    Metadata:
+      checkov:
+        skip:
+          - id: "CKV_AWS_158"
+            comment: "KMS encryption intentionally omitted for this sample tool — adds cost with no security benefit for non-sensitive API Gateway access logs"
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: "KMS encryption intentionally omitted for this sample tool — adds cost with no security benefit for non-sensitive API Gateway access logs"
     Properties:
       LogGroupName: !Sub "/aws/apigateway/${AWS::StackName}"
       RetentionInDays: 30
 
   # ── Frontend S3 + CloudFront ─────────────────────────────────────────────────
 
-  # CKV_AWS_18 / W35: Access logging intentionally omitted for this sample tool
-  # CKV_AWS_21: Versioning intentionally omitted for this sample tool — bucket contains only a single generated index.html
   FrontendBucket:
     Type: AWS::S3::Bucket
+    Metadata:
+      checkov:
+        skip:
+          - id: "CKV_AWS_18"
+            comment: "Access logging intentionally omitted for this sample tool"
+          - id: "CKV_AWS_21"
+            comment: "Versioning intentionally omitted — bucket contains only a single generated index.html"
+      cfn_nag:
+        rules_to_suppress:
+          - id: W35
+            reason: "Access logging intentionally omitted for this sample tool"
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -116,10 +143,21 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
-  # CKV_AWS_86 / W10: CloudFront access logging intentionally omitted for this sample tool
-  # CKV_AWS_68: WAF intentionally omitted for this sample tool — adds cost with no benefit for a static frontend
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    Metadata:
+      checkov:
+        skip:
+          - id: "CKV_AWS_86"
+            comment: "CloudFront access logging intentionally omitted for this sample tool"
+          - id: "CKV_AWS_68"
+            comment: "WAF intentionally omitted for this sample tool — adds cost with no benefit for a static frontend"
+      cfn_nag:
+        rules_to_suppress:
+          - id: W10
+            reason: "CloudFront access logging intentionally omitted for this sample tool"
+          - id: W70
+            reason: "MinimumProtocolVersion TLSv1.2_2021 is set — cfn_nag may not recognise it under SAM transform"
     Properties:
       DistributionConfig:
         Enabled: true
