@@ -180,6 +180,12 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 function purify(html) { return DOMPurify.sanitize(html, {ADD_ATTR: ['onclick', 'onchange', 'oninput', 'onblur', 'target'], ALLOW_ARIA_ATTR: true}); }
+function setHTML(el, html) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+  var wrapper = document.createElement('div');
+  wrapper.insertAdjacentHTML('afterbegin', html);
+  while (wrapper.firstChild) el.appendChild(wrapper.firstChild);
+}
 
 const STEPS = {
   registration_ssl: "HTTPS Certificate",
@@ -314,7 +320,7 @@ function updateStep(id, state, detail, data) {
   if (!el) return;
   el.className = `step ${state}`;
   const icons = { pass: "✓", fail: "✗", pending: "·", running: "", skipped: "–", warning: "!" };
-  el.querySelector(".badge").innerHTML = purify(state === "running" ? '<span class="spinner"></span>' : icons[state]);
+  setHTML(el.querySelector(".badge"), state === "running" ? '<span class="spinner"></span>' : icons[state]);
   const content = el.querySelector(".step-content");
   let statusP = content.querySelector("p.status");
   if (detail) {
@@ -324,7 +330,7 @@ function updateStep(id, state, detail, data) {
   if (data) {
     const pre = content.querySelector("pre");
     const html = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-    pre ? pre.outerHTML = purify(html) : content.insertAdjacentHTML("beforeend", purify(html));
+    pre ? (function() { var newPre = document.createElement('pre'); newPre.textContent = JSON.stringify(data, null, 2); pre.replaceWith(newPre); })() : content.insertAdjacentHTML("beforeend", purify(html));
   }
 }
 
@@ -376,7 +382,7 @@ async function detectListingType() {
           dimField.style.display = "none";
           dimField.parentElement.insertBefore(sel, dimField);
         }
-        sel.innerHTML = purify(result.dimensions.map(d => `<option value="${d}">${d}</option>`).join(""));
+        setHTML(sel, result.dimensions.map(d => `<option value="${d}">${d}</option>`).join(""));
         dimField.value = result.dimensions[0];
       }
     }
@@ -405,7 +411,7 @@ async function runTests() {
   const resultsCard = document.getElementById("resultsCard");
   const resultsEl = document.getElementById("results");
   resultsCard.classList.remove("hidden");
-  resultsEl.innerHTML = purify(steps.map(s => renderStep(s, "pending", STEPS[s], "Waiting...")).join(""));
+  setHTML(resultsEl, steps.map(s => renderStep(s, "pending", STEPS[s], "Waiting...")).join(""));
   resultsCard.scrollIntoView({ behavior: "smooth" });
   let customerIdentifier = null;
   let customerAWSAccountId = null;
@@ -813,7 +819,7 @@ async function retryFailed() {
   if (summaryEl && newFailed === 0) {
     summaryEl.style.borderColor = "#1d8348";
     summaryEl.style.background = "#f0faf4";
-    summaryEl.innerHTML = purify(`<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h3 style="font-size:15px;font-weight:600;color:#1d8348;margin:0">MCO Readiness</h3><span style="display:inline-block;background:#1d8348;color:white;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600">✓ Ready</span></div><p style="font-size:13px;color:#555">${newPassed} passed, 0 failed, ${newWarned} warning${newWarned !== 1 ? "s" : ""}, ${newSkipped} skipped</p>${newWarned > 0 ? '<p style="font-size:12px;color:#d68910;margin-top:6px">⚠ Warnings don\'t block MCO review but should be addressed.</p>' : ''}`);
+    setHTML(summaryEl, `<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h3 style="font-size:15px;font-weight:600;color:#1d8348;margin:0">MCO Readiness</h3><span style="display:inline-block;background:#1d8348;color:white;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600">✓ Ready</span></div><p style="font-size:13px;color:#555">${newPassed} passed, 0 failed, ${newWarned} warning${newWarned !== 1 ? "s" : ""}, ${newSkipped} skipped</p>${newWarned > 0 ? '<p style="font-size:12px;color:#d68910;margin-top:6px">⚠ Warnings don\'t block MCO review but should be addressed.</p>' : ''}`);
   }
 }
 
@@ -827,18 +833,18 @@ async function scoreListing() {
 
   const resultsEl = document.getElementById("scoreResults");
   resultsEl.classList.remove("hidden");
-  resultsEl.innerHTML = purify('<p style="color:#666;font-size:13px">Fetching listing data and running AI analysis...</p>');
+  setHTML(resultsEl, '<p style="color:#666;font-size:13px">Fetching listing data and running AI analysis...</p>');
 
   try {
     const result = await callApi(endpoint, "score_listing", { entity_id: entityId });
-    if (!result.pass) { resultsEl.innerHTML = purify(`<p style="color:#c0392b">${escapeHtml(result.error)}</p>`); return; }
+    if (!result.pass) { setHTML(resultsEl, `<p style="color:#c0392b">${escapeHtml(result.error)}</p>`); return; }
 
     window._lastScoreResult = result;
     window._lastEntityId = entityId;
     window._lastEndpoint = endpoint;
     renderScoreResults(result, entityId);
   } catch(e) {
-    resultsEl.innerHTML = purify(`<p style="color:#c0392b">Request failed: ${escapeHtml(e.message)}</p>`);
+    setHTML(resultsEl, `<p style="color:#c0392b">Request failed: ${escapeHtml(e.message)}</p>`);
   }
 
   btn.disabled = false; btn.textContent = "Score My Listing";
@@ -911,7 +917,7 @@ function renderScoreResults(result, entityId) {
   }).join("");
 
   const resultsEl = document.getElementById("scoreResults");
-  resultsEl.innerHTML = purify(`
+  setHTML(resultsEl, `
     <div class="score-hero">
       <div class="score-circle ${cls}">${s}</div>
       <div class="score-label" style="font-weight:600;font-size:14px;margin-bottom:4px">${escapeHtml(result.product_title) || entityId} — ${bandLabel}</div>
@@ -966,7 +972,7 @@ async function rewriteField(field, tipIdx) {
   const endpoint = window._lastEndpoint;
   const result = window._lastScoreResult;
   const container = document.getElementById(`rewrite-${tipIdx}`);
-  container.innerHTML = purify('<span style="font-size:12px;color:#666">Generating rewrite...</span>');
+  setHTML(container, '<span style="font-size:12px;color:#666">Generating rewrite...</span>');
 
   const context = `Title: ${result.product_title}`;
   const currentMap = {
@@ -979,16 +985,16 @@ async function rewriteField(field, tipIdx) {
 
   try {
     const r = await callApi(endpoint, "rewrite_field", { field, current: currentMap[field] || "", context });
-    if (!r.pass) { container.innerHTML = purify(`<p style="color:#c0392b;font-size:12px">${escapeHtml(r.error)}</p>`); return; }
-    container.innerHTML = purify(`<div class="rewrite-output">${escapeHtml(r.rewrite)}</div>
+    if (!r.pass) { setHTML(container, `<p style="color:#c0392b;font-size:12px">${escapeHtml(r.error)}</p>`); return; }
+    setHTML(container, `<div class="rewrite-output">${escapeHtml(r.rewrite)}</div>
       <button class="rewrite-copy" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);this.textContent='Copied!'">Copy</button>`);
   } catch(e) {
-    container.innerHTML = purify(`<p style="color:#c0392b;font-size:12px">Failed: ${e.message}</p>`);
+    setHTML(container, `<p style="color:#c0392b;font-size:12px">Failed: ${e.message}</p>`);
   }
 }
 
 async function rescoreListing() {
-  document.getElementById("scoreResults").innerHTML = purify('<p style="color:#666;font-size:13px">Re-scoring...</p>');
+  setHTML(document.getElementById("scoreResults"), '<p style="color:#666;font-size:13px">Re-scoring...</p>');
   const endpoint = window._lastEndpoint;
   const entityId = window._lastEntityId;
   try {
@@ -996,7 +1002,7 @@ async function rescoreListing() {
     window._lastScoreResult = result;
     renderScoreResults(result, entityId);
   } catch(e) {
-    document.getElementById("scoreResults").innerHTML = purify(`<p style="color:#c0392b">Failed: ${escapeHtml(e.message)}</p>`);
+    setHTML(document.getElementById("scoreResults"), `<p style="color:#c0392b">Failed: ${escapeHtml(e.message)}</p>`);
   }
 }
 
