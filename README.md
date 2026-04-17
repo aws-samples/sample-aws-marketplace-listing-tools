@@ -8,12 +8,12 @@ A self-service tool for AWS Marketplace SaaS sellers to validate listing integra
 
 ## Problem
 
-Getting your SaaS listing through Marketplace Operations (MCO) review can take days or weeks if something fails. Most failures are things you can catch yourself: your registration page not accepting the marketplace token, a missing API call, or EventBridge not wired up. But today there's no easy way to test these before you submit.
+Publishing a SaaS product on AWS Marketplace requires a registration page that integrates with the Marketplace APIs (ResolveCustomer, GetEntitlements, BatchMeterUsage). These integrations are reviewed by Marketplace Operations before your listing can go public. If something isn't right, you'll be sent back to fix it, adding days or weeks to your launch.
 
-Your listing also needs to work hard for you once it's live. 30% of buyers find products through Marketplace search, and 60% of clicks go to first-page results. If your title isn't optimised, your keywords are weak, or you don't offer a free trial, buyers won't find you. This toolkit helps you fix both problems:
+This toolkit gives you instant feedback on your integrations so you can find and fix issues before you submit for review. It also scores your listing content against product-led growth (PLG) best practices, helping you improve discoverability and conversion from day one.
 
-- **Integration Tests** — run the same checks MCO runs, against your live Limited listing, before you submit
-- **Listing Effectiveness Scorer** — get an AI-powered score across 12 categories with actionable recommendations to improve your search ranking, conversion, and buyer experience
+- **Integration Tests** — validate your registration page and API integrations against your live Limited listing
+- **Listing Effectiveness Scorer** — AI-powered scoring across 12 categories with actionable recommendations to improve search ranking and buyer experience
 
 ## Features
 
