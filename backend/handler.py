@@ -1768,6 +1768,17 @@ def _handle_cfn_event(event, context):
             ContentType="text/html",
         )
 
+        js_path = os.path.join(os.path.dirname(__file__), "app.js")
+        with open(js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+
+        s3.put_object(
+            Bucket=dest_bucket,
+            Key="app.js",
+            Body=js.encode("utf-8"),
+            ContentType="application/javascript",
+        )
+
         send_response("SUCCESS", {"Status": "Frontend deployed"})
     except Exception as e:
         print(f"Error: {e}")
