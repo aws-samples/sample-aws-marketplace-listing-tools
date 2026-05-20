@@ -1,8 +1,8 @@
 # AWS Marketplace Seller Toolkit
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
+[![License: MIT-0](https://img.shields.io/badge/License-MIT--0-yellow.svg)](LICENSE)
 
-> This is a sample solution and is not intended for production use. It is provided as-is and should be thoroughly reviewed and tested before use in any environment. Use at your own risk.
+> This is sample code provided for demonstration and educational purposes. It is not a supported AWS product.
 
 A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and score listing effectiveness. Deploys into the seller's own AWS account via AWS SAM.
 
@@ -112,4 +112,4 @@ This tool deploys resources into your AWS account. Review the IAM permissions in
 
 ## License
 
-This library is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file.
+This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file.
