@@ -53,19 +53,17 @@
   #tokenPreview { font-size: 12px; color: #1d8348; margin-top: -10px; margin-bottom: 12px; min-height: 18px; }
   .score-hero { text-align: center; padding: 24px 0 16px; }
   .tier-badge { display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: 700; color: white; margin-bottom: 8px; letter-spacing: 0.3px; }
-  .tier-badge.tier-needs-attention { background: #c0392b; }
-  .tier-badge.tier-needs-improvement { background: #d68910; }
-  .tier-badge.tier-good { background: #2980b9; }
-  .tier-badge.tier-high-standard { background: #1d8348; }
+  .tier-badge.tier-low { background: #c0392b; }
+  .tier-badge.tier-medium { background: #d68910; }
+  .tier-badge.tier-high { background: #1d8348; }
   .score-label { font-size: 13px; color: #666; }
   .score-bars { margin-top: 16px; }
   .score-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px; }
   .score-bar-label { flex: 1; color: #444; }
-  .tier-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: white; flex-shrink: 0; }
-  .tier-pill.tier-needs-attention { background: #c0392b; }
-  .tier-pill.tier-needs-improvement { background: #d68910; }
-  .tier-pill.tier-good { background: #2980b9; }
-  .tier-pill.tier-high-standard { background: #1d8348; }
+  .tier-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: white; flex-shrink: 0; min-width: 56px; text-align: center; }
+  .tier-pill.tier-low { background: #c0392b; }
+  .tier-pill.tier-medium { background: #d68910; }
+  .tier-pill.tier-high { background: #1d8348; }
   .tip-item { border-left: 3px solid #ff9900; padding: 10px 14px; margin-bottom: 10px; background: #fffaf0; border-radius: 0 4px 4px 0; font-size: 13px; }
   .tip-item strong { display: block; margin-bottom: 2px; color: #232f3e; }
   pre.example { font-size: 12px; background: #f4f4f4; border-left: 3px solid #ccc; padding: 8px 10px; margin-top: 8px; border-radius: 0 4px 4px 0; white-space: pre-wrap; font-family: inherit; color: #444; }
@@ -858,19 +856,18 @@ async function scoreListing() {
 }
 
 function renderScoreResults(result, entityId) {
-  const tier = result.overall_tier || "Needs Attention";
-  const tierClass = `tier-${tier.toLowerCase().replace(/\s+/g, "-")}`;
+  const tier = result.overall_tier || "Low";
+  const tierClass = `tier-${tier.toLowerCase()}`;
   const tierDesc = {
-    "High Standard": "Your listing is in great shape. Content is strong, PLG features are in place, and you're well positioned to be discovered and convert buyers.",
-    "Good": "Your listing meets guidelines with room to optimise. Address the recommendations below to push key categories to High Standard and stand out in search.",
-    "Needs Improvement": "Your listing has gaps that are likely affecting discoverability and buyer evaluation. Work through the recommendations below to lift each category.",
-    "Needs Attention": "Your listing needs significant work before it can compete effectively. Start with the highest priority recommendations below.",
+    "High": "Your listing is highly effective. Content is strong, PLG features are in place, and you're well positioned to be discovered and convert buyers.",
+    "Medium": "Your listing meets guidelines with room to optimise. Address the recommendations below to lift key categories to High effectiveness.",
+    "Low": "Your listing has significant gaps that are likely affecting discoverability and buyer evaluation. Start with the highest priority recommendations below.",
   }[tier] || "";
 
   const saved = JSON.parse(localStorage.getItem("mp-tester-done") || "[]");
 
   const bars = result.scores.map(sc => {
-    const pillClass = `tier-${sc.tier.toLowerCase().replace(/\s+/g, "-")}`;
+    const pillClass = `tier-${sc.tier.toLowerCase()}`;
     return `<div class="score-bar-row">
       <div class="score-bar-label">${sc.category}</div>
       <span class="tier-pill ${pillClass}">${sc.tier}</span>
@@ -936,10 +933,9 @@ function renderScoreResults(result, entityId) {
     <div id="scoringLegend" style="display:none;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;margin-bottom:16px;font-size:12px;line-height:1.7;color:#555">
       <strong style="color:#232f3e;font-size:13px">Tiers</strong>
       <div style="margin-top:6px">
-        <span class="tier-pill tier-needs-attention" style="margin-right:6px">Needs Attention</span> Critical gap or missing field that significantly affects discoverability or buyer trust.<br>
-        <span class="tier-pill tier-needs-improvement" style="margin-right:6px;margin-top:6px">Needs Improvement</span> Present but underdeveloped. Falls short of AWS Marketplace guidelines or PLG best practices.<br>
-        <span class="tier-pill tier-good" style="margin-right:6px;margin-top:6px">Good</span> Meets guidelines with minor room to optimise.<br>
-        <span class="tier-pill tier-high-standard" style="margin-right:6px;margin-top:6px">High Standard</span> Fully optimised against AWS Marketplace guidelines and PLG best practices.
+        <span class="tier-pill tier-low" style="margin-right:6px">Low</span> Field is missing or significantly below AWS Marketplace guidelines and PLG best practices.<br>
+        <span class="tier-pill tier-medium" style="margin-right:6px;margin-top:6px">Medium</span> Meets guidelines with room to optimise.<br>
+        <span class="tier-pill tier-high" style="margin-right:6px;margin-top:6px">High</span> Fully optimised against AWS Marketplace guidelines and PLG best practices.
       </div>
       <div style="margin-top:10px;color:#777">Tiers are derived from deterministic checks (length, structure, completeness, generic-phrase detection). Static recommendations (Reviews, Vendor Insights, SCMP, Pricing Strategy) appear regardless of tier and are not used to compute the overall result.</div>
     </div>

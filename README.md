@@ -32,7 +32,7 @@ Get a tiered assessment of your listing across 10 categories, with specific reco
 - **Trial** — Free Trial availability
 - **Support** — Contact information completeness
 
-Each category is rated on a 4-tier scale: **Needs Attention**, **Needs Improvement**, **Good**, **High Standard**. The overall listing tier is derived from the per-category tiers, weighted toward the worst categories so a single weak field doesn't drag down a strong listing but multiple gaps still flag clearly. Pricing strategy, reviews (G2/Peerspot), Vendor Insights, and Standard Contract (SCMP) appear as separate recommendations rather than scored categories, since these are business decisions or rely on third-party platforms.
+Each category is rated on a 3-tier effectiveness scale: **Low**, **Medium**, **High**. The overall listing tier is derived from the per-category tiers — a single weak field doesn't drag down a strong listing, but multiple gaps still flag clearly. Pricing strategy, reviews (G2/Peerspot), Vendor Insights, and Standard Contract (SCMP) appear as separate recommendations rather than scored categories, since these are business decisions or rely on third-party platforms.
 
 > **Note:** Tier assessments are derived from deterministic checks against AWS Marketplace listing guidelines and PLG best practices. AI-generated rewrites and the executive summary (powered by Amazon Bedrock) are provided as guidance and should be reviewed before use.
 

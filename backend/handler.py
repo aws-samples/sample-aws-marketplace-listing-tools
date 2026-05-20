@@ -66,7 +66,7 @@ GUIDELINES = {
     },
 }
 
-SCORING_TIERS = ["Needs Attention", "Needs Improvement", "Good", "High Standard"]
+SCORING_TIERS = ["Low", "Medium", "High"]
 
 # Generic words that indicate a weak product title when used alone or without
 # a brand identifier alongside them.
@@ -93,8 +93,8 @@ _DESC_VALUE_MARKERS = (
 
 def _has_metric(text):
     """Return True if text contains a number, percentage, or 'x' multiplier
-    that suggests a measurable claim. Used to differentiate Good from
-    High Standard for highlights."""
+    that suggests a measurable claim. Used to differentiate Medium from
+    High for highlights."""
     if not text:
         return False
     lower = text.lower()
@@ -104,166 +104,151 @@ def _has_metric(text):
 
 
 def tier_title(title):
-    """Return the tier for the product title.
+    """Return the effectiveness tier for the product title.
 
-    Needs Attention   — empty
-    Needs Improvement — too short, too long, or contains generic words alone
-    Good              — adequate length and case but lacks descriptive terms
-    High Standard     — title case, descriptive, no generics, within length"""
+    Low    — empty, too short/long, only generic words, or all-lowercase
+    Medium — adequate length and case, brand identifier present
+    High   — title case, descriptive terms beyond brand, no generics, within length"""
     if not title or not title.strip():
-        return "Needs Attention"
+        return "Low"
     t = title.strip()
     length = len(t)
     if length < 10 or length > 80:
-        return "Needs Improvement"
+        return "Low"
     words = t.split()
     if len(words) < 2:
-        return "Needs Improvement"
+        return "Low"
     lower_words = [w.lower().strip(" ,.-—:") for w in words]
     # Reject titles that are only generic words (e.g. "Test Solution")
     if all(w in _GENERIC_TITLE_WORDS or len(w) <= 2 for w in lower_words):
-        return "Needs Attention"
+        return "Low"
     # Reject all-lowercase titles
     if t == t.lower():
-        return "Needs Improvement"
+        return "Low"
     # Title case check — at least 60% of significant words start uppercase
     significant_words = [w for w in words if len(w) > 2]
     if significant_words:
         cased = sum(1 for w in significant_words if w[0].isupper())
         if cased < len(significant_words) * 0.6:
-            return "Needs Improvement"
-    # High Standard requires descriptive content beyond a single brand word.
-    # Look for at least one descriptive (non-generic, non-tiny) word in addition
-    # to whatever brand or generic is present.
+            return "Low"
+    # High requires descriptive content beyond a single brand word.
     descriptive_words = [
         w for w in lower_words
         if len(w) > 3 and w not in _GENERIC_TITLE_WORDS
     ]
     if len(descriptive_words) >= 2 and length <= 80:
-        return "High Standard"
-    return "Good"
+        return "High"
+    return "Medium"
 
 
 def tier_short_description(desc):
-    """Return the tier for the short description.
+    """Return the effectiveness tier for the short description.
 
-    Needs Attention   — empty or over 350 characters (guideline violation)
-    Needs Improvement — under 100 chars or leads with self-promotion
-    Good              — within length, leads with value
-    High Standard     — within length, leads with strong value verb or metric"""
+    Low    — empty, over 350 characters, under 100 chars, or self-promotion start
+    Medium — within length, leads with value (no metric or strong action verb)
+    High   — within length, leads with strong value verb or contains a metric"""
     if not desc or not desc.strip():
-        return "Needs Attention"
+        return "Low"
     t = desc.strip()
     length = len(t)
-    if length > 350:
-        return "Needs Attention"
-    if length < 100:
-        return "Needs Improvement"
+    if length > 350 or length < 100:
+        return "Low"
     lower = t.lower()
     if lower.startswith(_DESC_SELF_START):
-        return "Needs Improvement"
-    # High Standard: leads with action / value verb or contains a metric
+        return "Low"
+    # High: leads with action / value verb or contains a metric
     first_word = lower.split()[0] if lower.split() else ""
     if first_word in _DESC_VALUE_MARKERS or any(m in lower for m in _DESC_VALUE_MARKERS):
-        return "High Standard"
-    return "Good"
+        return "High"
+    return "Medium"
 
 
 def tier_highlights(highlights):
-    """Return the tier for product highlights.
+    """Return the effectiveness tier for product highlights.
 
-    Needs Attention   — none
-    Needs Improvement — fewer than 3 or all generic
-    Good              — 3 highlights, specific, no generics
-    High Standard     — 3 highlights, specific, contain measurable claims"""
+    Low    — none, fewer than 3, contains generic phrases, or any too short
+    Medium — 3 specific highlights, no generics, but no measurable claim
+    High   — 3 specific highlights, no generics, at least one measurable claim"""
     if not highlights:
-        return "Needs Attention"
+        return "Low"
     items = [str(h).strip() for h in highlights if str(h).strip()]
     if len(items) < 3:
-        return "Needs Improvement"
+        return "Low"
     generic_phrases = GUIDELINES["highlights"]["generic_phrases"]
     has_generic = any(
         any(gp in h.lower() for gp in generic_phrases)
         for h in items
     )
     if has_generic:
-        return "Needs Improvement"
+        return "Low"
     if any(len(h) < 30 for h in items):
-        return "Needs Improvement"
-    # High Standard requires at least one highlight with a measurable claim
+        return "Low"
     if any(_has_metric(h) for h in items):
-        return "High Standard"
-    return "Good"
+        return "High"
+    return "Medium"
 
 
 def tier_categories(categories):
-    """Return the tier for marketplace categories.
+    """Return the effectiveness tier for marketplace categories.
 
-    Needs Attention   — none
-    Needs Improvement — 1 of 3
-    Good              — 2 of 3
-    High Standard     — 3 of 3 (the maximum)"""
+    Low    — none or 1 of 3
+    Medium — 2 of 3
+    High   — 3 of 3 (the maximum)"""
     if not categories:
-        return "Needs Attention"
+        return "Low"
     count = len(categories)
     if count == 1:
-        return "Needs Improvement"
+        return "Low"
     if count == 2:
-        return "Good"
-    return "High Standard"
+        return "Medium"
+    return "High"
 
 
 def tier_keywords(keywords):
-    """Return the tier for search keywords.
+    """Return the effectiveness tier for search keywords.
 
-    Needs Attention   — none
-    Needs Improvement — 1 keyword
-    Good              — 2 keywords or 3 short keywords
-    High Standard     — 3 keywords each at least 5 characters"""
+    Low    — none or 1 keyword
+    Medium — 2 keywords or 3 short keywords
+    High   — 3 keywords each at least 5 characters"""
     if not keywords:
-        return "Needs Attention"
+        return "Low"
     count = len(keywords)
     if count == 1:
-        return "Needs Improvement"
+        return "Low"
     if count == 2:
-        return "Good"
-    # 3 or more
+        return "Medium"
     if all(len(kw.strip()) >= 5 for kw in keywords):
-        return "High Standard"
-    return "Good"
+        return "High"
+    return "Medium"
 
 
 def tier_long_description(text):
-    """Return the tier for long description.
+    """Return the effectiveness tier for long description.
 
-    Needs Attention   — empty or under 150 chars
-    Needs Improvement — under 300 chars
-    Good              — 300+ with at least one structure indicator
-    High Standard     — 300+ with multiple structure indicators"""
+    Low    — empty or under 300 characters
+    Medium — 300+ characters with at least one structure indicator
+    High   — 300+ characters with multiple structure indicators"""
     if not text or not text.strip():
-        return "Needs Attention"
+        return "Low"
     length = len(text.strip())
-    if length < 150:
-        return "Needs Attention"
     if length < 300:
-        return "Needs Improvement"
+        return "Low"
     lower_text = text.lower()
     structure_indicators = ["use case", "feature", "integration", "compliance", "benefit"]
     matches = sum(1 for ind in structure_indicators if ind in lower_text)
     if matches >= 2:
-        return "High Standard"
+        return "High"
     if matches >= 1:
-        return "Good"
-    return "Needs Improvement"
+        return "Medium"
+    return "Low"
 
 
 def tier_media(details):
-    """Return the tier for media (screenshots and videos).
+    """Return the effectiveness tier for media (screenshots and videos).
 
-    Needs Attention   — no media
-    Needs Improvement — single screenshot
-    Good              — multiple screenshots, no video
-    High Standard     — video plus screenshots"""
+    Low    — no media or single screenshot
+    Medium — multiple screenshots, or video without screenshots
+    High   — video plus screenshots"""
     promo = details.get("PromotionalResources", {})
     videos = promo.get("Videos", details.get("Videos", []))
     screenshots = promo.get("Screenshots", details.get("Screenshots", []))
@@ -273,71 +258,65 @@ def tier_media(details):
     total_images = (len(screenshots) if screenshots else 0) + (len(additional) if additional else 0)
 
     if has_video and total_images > 0:
-        return "High Standard"
+        return "High"
     if has_video or total_images >= 2:
-        return "Good"
-    if total_images == 1:
-        return "Needs Improvement"
-    return "Needs Attention"
+        return "Medium"
+    return "Low"
 
 
 def tier_support(details):
-    """Return the tier for support information.
+    """Return the effectiveness tier for support information.
 
-    Needs Attention   — no support description
-    Needs Improvement — description only
-    Good              — description with URL or email
-    High Standard     — description with URL and email"""
+    Low    — no support description, or description only
+    Medium — description with URL or email
+    High   — description with both URL and email"""
     support_info = details.get("SupportInformation", {})
     description = support_info.get("Description", "")
     if not description or not description.strip():
-        return "Needs Attention"
+        return "Low"
     text = description.strip()
     has_url = "http://" in text or "https://" in text
     has_email = "@" in text
     if has_url and has_email:
-        return "High Standard"
+        return "High"
     if has_url or has_email:
-        return "Good"
-    return "Needs Improvement"
+        return "Medium"
+    return "Low"
 
 
 def tier_free_trial(has_trial):
-    """Return the tier for free trial presence.
+    """Return the effectiveness tier for free trial presence.
 
-    Needs Improvement — no free trial
-    High Standard     — free trial offered
+    Low  — no free trial
+    High — free trial offered
 
     Free trial is recommended regardless of pricing model: AWS Marketplace data
-    shows 25% of buyers consider free trials essential before purchase, and
-    free-trial-to-paid conversion rates are materially higher than direct buy."""
-    return "High Standard" if has_trial else "Needs Improvement"
+    shows 25% of buyers consider free trials essential before purchase."""
+    return "High" if has_trial else "Low"
 
 
 def tier_title_seo(title):
-    """Return the tier for title SEO.
+    """Return the effectiveness tier for title SEO.
 
-    Needs Attention   — empty
-    Needs Improvement — fewer than 3 words
-    Good              — 3 to 4 words
-    High Standard     — 5+ words with at least one descriptive term beyond brand"""
+    Low    — empty or fewer than 3 words
+    Medium — 3 to 4 words, or 5+ without descriptive terms beyond brand
+    High   — 5+ words with multiple descriptive terms beyond brand"""
     if not title or not title.strip():
-        return "Needs Attention"
+        return "Low"
     words = title.strip().split()
     word_count = len(words)
     if word_count < 3:
-        return "Needs Improvement"
+        return "Low"
     if word_count < 5:
-        return "Good"
-    # 5+ words — check for descriptive terms beyond a single brand name
+        return "Medium"
     lower_words = [w.lower().strip(" ,.-—:") for w in words]
     descriptive = [
         w for w in lower_words
         if len(w) > 3 and w not in _GENERIC_TITLE_WORDS
     ]
     if len(descriptive) >= 2:
-        return "High Standard"
-    return "Good"
+        return "High"
+    return "Medium"
 
 
 # Order of categories used to compute the overall listing tier and to display
@@ -359,33 +338,30 @@ SCORED_CATEGORIES = [
 def overall_tier_from_categories(scores):
     """Compute the overall listing tier from per-category tiers.
 
-    The overall tier is determined by the worst category, with two exceptions:
-    - A single 'Needs Improvement' or 'Needs Attention' among otherwise strong
-      categories does not pull the whole listing down further than 'Good'.
-    - The overall tier cannot exceed the median tier of all categories.
+    With three tiers (Low / Medium / High), we balance two concerns:
+    a single weak field shouldn't drag a strong listing down to Low,
+    but several gaps should still show as Low overall.
 
-    This rewards listings that are broadly strong while still flagging when
-    multiple gaps need attention."""
+    Rules (proportions are over total scored categories):
+    - 30%+ Low                     -> Low
+    - Any Low                      -> Medium
+    - Majority High (>50%) + no Low -> High
+    - Otherwise                    -> Medium"""
     if not scores:
-        return "Needs Attention"
-    tier_index = {t: i for i, t in enumerate(SCORING_TIERS)}
-    indices = [tier_index[s["tier"]] for s in scores if s.get("tier") in tier_index]
-    if not indices:
-        return "Needs Attention"
-    indices.sort()
-    median_idx = indices[len(indices) // 2]
-    worst_idx = indices[0]
-    needs_attention_count = sum(1 for i in indices if i == 0)
-    needs_improvement_count = sum(1 for i in indices if i == 1)
-    if needs_attention_count >= 2:
-        return "Needs Attention"
-    if needs_attention_count == 1 and needs_improvement_count >= 2:
-        return "Needs Attention"
-    if needs_attention_count == 1 or needs_improvement_count >= 3:
-        return "Needs Improvement"
-    if median_idx >= 3 and worst_idx >= 2:
-        return "High Standard"
-    return "Good"
+        return "Low"
+    tiers = [s.get("tier") for s in scores if s.get("tier") in SCORING_TIERS]
+    if not tiers:
+        return "Low"
+    total = len(tiers)
+    low_count = tiers.count("Low")
+    high_count = tiers.count("High")
+    if low_count / total >= 0.30:
+        return "Low"
+    if low_count > 0:
+        return "Medium"
+    if high_count > total / 2:
+        return "High"
+    return "Medium"
 
 
 # ── Product Context Derivation ───────────────────────────────────────────────
@@ -1591,80 +1567,80 @@ def score_listing(body):
     # ── Title ────────────────────────────────────────────────────────────────
     title_tier = tier_title(title)
     scores.append({"category": "Title", "tier": title_tier})
-    if title_tier in ("Needs Attention", "Needs Improvement"):
+    if title_tier == "Low":
         if not title:
             tips.append({"category": "Title", "tip": "Product title not found.", "example": "✓ Good: \"Splunk Enterprise Security — SIEM & Threat Detection\""})
         else:
             tips.append({"category": "Title", "tip": "Use title case, include your brand name, and add descriptive terms beyond generic words like 'solution' or 'platform'.", "example": "✓ Good: \"Datadog — Cloud Monitoring & Security Platform\"\n✗ Avoid: \"Our Amazing Software v2.0\" or \"datadog monitoring tool\""})
-    elif title_tier == "Good":
-        tips.append({"category": "Title", "tip": "Your title is solid. Add another descriptive term (category, use case) to push to High Standard and improve search ranking.", "example": "✓ Better: \"Datadog — Cloud Monitoring & Security Platform\" instead of \"Datadog Monitoring\""})
+    elif title_tier == "Medium":
+        tips.append({"category": "Title", "tip": "Add another descriptive term (category or use case) to improve search ranking and lift your title to High effectiveness.", "example": "✓ Better: \"Datadog — Cloud Monitoring & Security Platform\" instead of \"Datadog Monitoring\""})
 
     # ── Short Description ────────────────────────────────────────────────────
     desc_tier = tier_short_description(desc)
     scores.append({"category": "Short Description", "tier": desc_tier})
-    if desc_tier in ("Needs Attention", "Needs Improvement"):
+    if desc_tier == "Low":
         if not desc:
             tips.append({"category": "Short Description", "tip": "Short description is missing. This is the first thing buyers read on the listing card.", "example": "✓ Good: \"Automatically detect and respond to cloud threats across AWS, Azure, and GCP — no agents required.\""})
         elif len(desc) > 350:
             tips.append({"category": "Short Description", "tip": f"Description is {len(desc)} characters. Trim to 350 or less to comply with the guideline.", "example": "✓ Keep it under 350 characters and lead with the problem solved, not your company name."})
         else:
             tips.append({"category": "Short Description", "tip": "Lead with the problem you solve or the value delivered, not your company name. Start with an action verb where possible.", "example": "✓ Good: \"Automatically detect and respond to cloud threats across AWS, Azure, and GCP — no agents required.\"\n✗ Avoid: \"We are a leading cybersecurity company offering our award-winning platform.\""})
-    elif desc_tier == "Good":
-        tips.append({"category": "Short Description", "tip": "Add a measurable outcome or metric to push to High Standard.", "example": "✓ Better: \"Cut MTTR by 60% by automatically detecting and responding to cloud threats — no agents required.\""})
+    elif desc_tier == "Medium":
+        tips.append({"category": "Short Description", "tip": "Add a measurable outcome or metric to lift your description to High effectiveness.", "example": "✓ Better: \"Cut MTTR by 60% by automatically detecting and responding to cloud threats — no agents required.\""})
 
     # ── Highlights ───────────────────────────────────────────────────────────
     hl_tier = tier_highlights(highlights)
     scores.append({"category": "Highlights", "tier": hl_tier})
     hl_count = len(highlights) if highlights else 0
-    if hl_tier == "Needs Attention":
-        tips.append({"category": "Highlights", "tip": "No highlights found. Add 3 bullet points — highlights are one of 6 key AWS Marketplace search ranking fields.", "example": "✓ \"Cut infrastructure costs by up to 40% with automated rightsizing\"\n✓ \"Deploy in under 5 minutes with one-click Quick Launch\"\n✓ \"SOC 2 Type II certified — meet compliance requirements out of the box\""})
-    elif hl_tier == "Needs Improvement":
-        if hl_count < 3:
+    if hl_tier == "Low":
+        if hl_count == 0:
+            tips.append({"category": "Highlights", "tip": "No highlights found. Add 3 bullet points — highlights are one of 6 key AWS Marketplace search ranking fields.", "example": "✓ \"Cut infrastructure costs by up to 40% with automated rightsizing\"\n✓ \"Deploy in under 5 minutes with one-click Quick Launch\"\n✓ \"SOC 2 Type II certified — meet compliance requirements out of the box\""})
+        elif hl_count < 3:
             tips.append({"category": "Highlights", "tip": f"You have {hl_count} of 3 highlights. Add the remaining ones — highlights are a key search ranking field.", "example": "✓ Each highlight should cover a distinct benefit: cost savings, time savings, or risk reduction with a specific metric."})
         else:
-            tips.append({"category": "Highlights", "tip": "Replace generic phrases (Easy to use, Scalable, Reliable, Powerful) with specific, benefit-driven claims.", "example": "✓ Good: \"Reduce MTTR by 60% with AI-powered root cause analysis across your entire stack\"\n✗ Avoid: \"Easy to use\" or \"Scalable and reliable solution\""})
-    elif hl_tier == "Good":
-        tips.append({"category": "Highlights", "tip": "Add measurable outcomes (percentages, time saved, cost reduced) to at least one highlight to push to High Standard.", "example": "✓ Better: \"Reduce MTTR by 60% with AI-powered root cause analysis\" instead of \"AI-powered root cause analysis across your stack\""})
+            tips.append({"category": "Highlights", "tip": "Replace generic phrases (Easy to use, Scalable, Reliable, Powerful) with specific, benefit-driven claims and add measurable outcomes.", "example": "✓ Good: \"Reduce MTTR by 60% with AI-powered root cause analysis across your entire stack\"\n✗ Avoid: \"Easy to use\" or \"Scalable and reliable solution\""})
+    elif hl_tier == "Medium":
+        tips.append({"category": "Highlights", "tip": "Add measurable outcomes (percentages, time saved, cost reduced) to at least one highlight to lift Highlights to High effectiveness.", "example": "✓ Better: \"Reduce MTTR by 60% with AI-powered root cause analysis\" instead of \"AI-powered root cause analysis across your stack\""})
 
     # ── Long Description ─────────────────────────────────────────────────────
     long_desc_tier = tier_long_description(long_desc)
     scores.append({"category": "Long Description", "tier": long_desc_tier})
-    if long_desc_tier in ("Needs Attention", "Needs Improvement"):
-        tips.append({"category": "Long Description", "tip": "Expand your long description with use cases, integrations, and outcomes. Customers use generative AI-powered comparisons to evaluate listings, so detail wins.", "example": "✓ Include: key use cases, target personas, integration ecosystem, compliance certifications, and customer outcomes with metrics.\n✓ Structure with clear sections: Overview → Use Cases → Key Features → Why Choose Us"})
-    elif long_desc_tier == "Good":
-        tips.append({"category": "Long Description", "tip": "Add a second structural element (e.g. compliance certifications or integrations) to push to High Standard.", "example": "✓ Mention specific integrations (Slack, ServiceNow, Datadog) and compliance certifications (SOC 2, ISO 27001, HIPAA) where relevant."})
+    if long_desc_tier == "Low":
+        tips.append({"category": "Long Description", "tip": "Expand your long description to at least 300 characters with use cases, integrations, and outcomes. Customers use generative AI-powered comparisons to evaluate listings, so detail wins.", "example": "✓ Include: key use cases, target personas, integration ecosystem, compliance certifications, and customer outcomes with metrics.\n✓ Structure with clear sections: Overview → Use Cases → Key Features → Why Choose Us"})
+    elif long_desc_tier == "Medium":
+        tips.append({"category": "Long Description", "tip": "Add a second structural element (e.g. compliance certifications or integrations) to lift Long Description to High effectiveness.", "example": "✓ Mention specific integrations (Slack, ServiceNow, Datadog) and compliance certifications (SOC 2, ISO 27001, HIPAA) where relevant."})
 
     # ── Categories ────────────────────────────────────────────────────────────
     cat_tier = tier_categories(categories)
     scores.append({"category": "Categories", "tier": cat_tier})
     cat_count = len(categories) if categories else 0
-    if cat_tier == "Needs Attention":
+    if cat_tier == "Low" and cat_count == 0:
         tips.append({"category": "Categories", "tip": "No categories selected. Choose up to 3 relevant categories to help buyers discover your listing."})
-    elif cat_tier in ("Needs Improvement", "Good") and cat_count < 3:
+    elif cat_tier in ("Low", "Medium") and cat_count < 3:
         tips.append({"category": "Categories", "tip": f"You have {cat_count} of 3 categories. Add the remaining ones to maximise discoverability.", "example": "✓ Choose categories aligned with how buyers browse: e.g. Security + Monitoring + Compliance for an observability product."})
 
     # ── Search Keywords ───────────────────────────────────────────────────────
     kw_tier = tier_keywords(keywords)
     scores.append({"category": "Search Keywords", "tier": kw_tier})
-    if kw_tier in ("Needs Attention", "Needs Improvement", "Good"):
+    if kw_tier in ("Low", "Medium"):
         tips.append({"category": "Search Keywords", "tip": "Use all 3 keywords with buyer-vocabulary terms — 30% of Marketplace traffic comes from search engines and the majority of clicks go to the first 5 results.", "example": "✓ Good: \"cloud monitoring\", \"infrastructure observability\", \"APM tool\"\n✗ Avoid: your product name or company name (already indexed separately)"})
 
     # ── Media / Videos ────────────────────────────────────────────────────────
     media_tier = tier_media(details)
     scores.append({"category": "Media / Videos", "tier": media_tier})
-    if media_tier != "High Standard":
+    if media_tier != "High":
         tips.append({"category": "Media / Videos", "tip": "Add a demo video and screenshots. 20% of customers engage with videos on listing pages, and listings with rich media see 3x higher pricing engagement.", "example": "✓ Add a 2-3 minute product demo video and at least 3 screenshots showing key features."})
 
     # ── Support ───────────────────────────────────────────────────────────────
     support_tier = tier_support(details)
     scores.append({"category": "Support", "tier": support_tier})
-    if support_tier != "High Standard":
+    if support_tier != "High":
         tips.append({"category": "Support", "tip": "Provide complete support information including a description, support URL, and email address.", "example": "✓ Include: support description, URL (e.g. https://support.example.com), and email (e.g. support@example.com)."})
 
     # ── Title SEO ─────────────────────────────────────────────────────────────
     title_seo_tier = tier_title_seo(title)
     scores.append({"category": "Title SEO", "tier": title_seo_tier})
-    if title_seo_tier in ("Needs Attention", "Needs Improvement"):
+    if title_seo_tier == "Low":
         tips.append({"category": "Title SEO", "tip": "Optimise your title with searchable terms buyers use — title is one of 6 key search ranking fields on AWS Marketplace.", "example": "✓ Good: \"Datadog — Cloud Monitoring & Security Platform\"\n✗ Avoid: \"Datadog\" alone or \"Our Monitoring Tool\""})
 
     # ── Pricing — fetch from public offer for accurate detection ─────────────
@@ -1751,7 +1727,7 @@ def score_listing(body):
     # ── Sort tips by tier severity (worst first), then by category order ─────
     tier_severity = {t: i for i, t in enumerate(SCORING_TIERS)}
     score_tier_map = {s["category"]: s["tier"] for s in scores}
-    tips.sort(key=lambda t: tier_severity.get(score_tier_map.get(t["category"], "High Standard"), 99))
+    tips.sort(key=lambda t: tier_severity.get(score_tier_map.get(t["category"], "High"), 99))
 
     # ── AI executive summary ─────────────────────────────────────────────────
     summary = ""
@@ -1778,7 +1754,7 @@ Write a concise, actionable summary that:
 2. Identifies the 2-3 highest priority areas to fix, referencing specific guidelines where relevant
 3. Ends with one specific next action they should take today
 
-Tiers run from 'Needs Attention' (worst) to 'Needs Improvement', 'Good', and 'High Standard' (best). Be direct and specific. Do not use bullet points. Do not mention numerical scores or percentages. Do not mention AWS Marketplace by name repeatedly. Tailor advice to this product's domain ({product_context["industry"]})."""
+Tiers reflect listing effectiveness: 'Low' means the field is missing or significantly below guidelines, 'Medium' means it meets guidelines with room to optimise, 'High' means it is fully optimised. Be direct and specific. Do not use bullet points. Do not mention numerical scores or percentages. Do not mention AWS Marketplace by name repeatedly. Tailor advice to this product's domain ({product_context["industry"]})."""
 
         resp = bedrock.invoke_model(
             modelId="anthropic.claude-3-haiku-20240307-v1:0",

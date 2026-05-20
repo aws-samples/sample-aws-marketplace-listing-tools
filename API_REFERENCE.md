@@ -129,7 +129,7 @@ This document describes every AWS API call made by the tool, grouped by feature.
 | Detail | Value |
 |--------|-------|
 | Logic | Deterministic checks against AWS Marketplace listing guidelines and PLG best practices |
-| Output | Each scored category receives one of four tiers: Needs Attention, Needs Improvement, Good, High Standard |
+| Output | Each scored category receives one of three effectiveness tiers: Low, Medium, High |
 | Categories | Title, Short Description, Highlights, Long Description, Categories, Search Keywords, Media / Videos, Support, Free Trial, Title SEO |
 | Overall tier | Derived from per-category tiers (worst-weighted, see `overall_tier_from_categories` in handler.py) |
 
