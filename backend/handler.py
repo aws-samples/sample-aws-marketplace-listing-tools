@@ -68,6 +68,66 @@ GUIDELINES = {
 
 SCORING_TIERS = ["Low", "Medium", "High"]
 
+# Each scored category belongs to one of three thematic groups. The frontend
+# renders categories grouped by these labels for easier scanning.
+CATEGORY_GROUPS = {
+    "Title": "Content",
+    "Short Description": "Content",
+    "Highlights": "Content",
+    "Long Description": "Content",
+    "Categories": "Discoverability",
+    "Search Keywords": "Discoverability",
+    "Title SEO": "Discoverability",
+    "Media / Videos": "Buyer Experience",
+    "Support": "Buyer Experience",
+    "Free Trial": "Buyer Experience",
+}
+
+# Internal weights for the overall tier rollup. Higher weight means the
+# category contributes more to the overall result. These are NOT surfaced
+# in the UI — they're a tuning knob to make the rollup match how a Marketplace
+# reviewer would judge a listing. Title and Short Description carry the most
+# weight because they are the first thing buyers see and the strongest search
+# ranking signals.
+CATEGORY_WEIGHTS_INTERNAL = {
+    "Title": 3,
+    "Short Description": 3,
+    "Highlights": 2,
+    "Long Description": 1,
+    "Categories": 1,
+    "Search Keywords": 2,
+    "Title SEO": 1,
+    "Media / Videos": 2,
+    "Support": 1,
+    "Free Trial": 2,
+}
+
+# Per-category benchmark snapshots. These are point-in-time estimates based on
+# AWS Marketplace PLG presentation data and observation. They are intended as
+# directional context for sellers, not precise statistics. Refresh periodically
+# as more data becomes available.
+CATEGORY_BENCHMARKS = {
+    "Title":             "About 4 in 10 listings reach High on title strength",
+    "Short Description": "Most listings sit at Medium — High requires a value-led opening with a metric",
+    "Highlights":        "Roughly 1 in 4 listings has 3 highlights with measurable claims",
+    "Long Description":  "About half of listings include multiple structural elements (use cases, integrations, compliance)",
+    "Categories":        "Most listings select 1-2 categories; only 3 reaches High",
+    "Search Keywords":   "About 6 in 10 listings use all 3 keyword slots",
+    "Title SEO":         "Strong titles use 5+ words including descriptive terms beyond the brand",
+    "Media / Videos":    "Listings with both video and screenshots see 3x higher pricing engagement",
+    "Support":           "About half of listings provide both a support URL and email",
+    "Free Trial":        "1 in 4 buyers consider a free trial essential before purchase",
+}
+
+# Heuristic markers that suggest a listing is a test or demo, not a live
+# customer-facing listing. The scorer still runs but the frontend shows a
+# banner so the seller understands why scores are low.
+_TEST_LISTING_MARKERS = (
+    "test", "demo", "sample", "example", "anycompany", "any company",
+    "your company", "placeholder", "hello world", "hello, world",
+    "lorem ipsum",
+)
+
 # Generic words that indicate a weak product title when used alone or without
 # a brand identifier alongside them.
 _GENERIC_TITLE_WORDS = {
@@ -101,6 +161,185 @@ def _has_metric(text):
     if "%" in lower or "x " in lower or "x." in lower:
         return True
     return any(c.isdigit() for c in lower)
+
+
+def _looks_like_test_listing(title, desc):
+    """Detect listings that look like tests, demos, or placeholders.
+
+    Returns True if the title or description contains markers that suggest
+    the listing is not yet a real customer-facing listing. Used by the frontend
+    to show a contextual banner so sellers understand why scores are low."""
+    combined = f"{title or ''} {desc or ''}".lower().strip()
+    if not combined:
+        return False
+    return any(marker in combined for marker in _TEST_LISTING_MARKERS)
+
+
+def _truncate(text, max_len=120):
+    """Truncate text for inline display in the frontend, preserving the start."""
+    if not text:
+        return ""
+    text = str(text).strip()
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
+
+
+def _category_value_preview(category, title, desc, long_desc, highlights, keywords, categories, details, has_free_trial):
+    """Return the human-readable current value for a scored category, used to
+    display the listing content inline next to its tier in the frontend."""
+    if category == "Title":
+        if title:
+            return {"value": _truncate(title, 80), "meta": f"{len(title)} chars"}
+        return {"value": "(empty)", "meta": ""}
+    if category == "Short Description":
+        if desc:
+            return {"value": _truncate(desc, 200), "meta": f"{len(desc)} chars"}
+        return {"value": "(empty)", "meta": ""}
+    if category == "Highlights":
+        count = len(highlights) if highlights else 0
+        if count == 0:
+            return {"value": "(none)", "meta": "0 of 3"}
+        items = [_truncate(str(h), 100) for h in highlights]
+        return {"value": " · ".join(items), "meta": f"{count} of 3"}
+    if category == "Long Description":
+        if long_desc:
+            return {"value": _truncate(long_desc, 200), "meta": f"{len(long_desc)} chars"}
+        return {"value": "(empty)", "meta": ""}
+    if category == "Categories":
+        count = len(categories) if categories else 0
+        if count == 0:
+            return {"value": "(none)", "meta": "0 of 3"}
+        return {"value": ", ".join(str(c) for c in categories), "meta": f"{count} of 3"}
+    if category == "Search Keywords":
+        count = len(keywords) if keywords else 0
+        if count == 0:
+            return {"value": "(none)", "meta": "0 of 3"}
+        return {"value": ", ".join(str(k) for k in keywords), "meta": f"{count} of 3"}
+    if category == "Title SEO":
+        word_count = len(title.split()) if title else 0
+        return {"value": _truncate(title, 80) if title else "(no title)", "meta": f"{word_count} words"}
+    if category == "Media / Videos":
+        promo = details.get("PromotionalResources", {})
+        videos = promo.get("Videos", details.get("Videos", []))
+        screenshots = promo.get("Screenshots", details.get("Screenshots", []))
+        additional = promo.get("AdditionalResources", details.get("AdditionalResources", []))
+        v = len(videos) if videos else 0
+        s = (len(screenshots) if screenshots else 0) + (len(additional) if additional else 0)
+        parts = []
+        if v:
+            parts.append(f"{v} video{'s' if v != 1 else ''}")
+        if s:
+            parts.append(f"{s} image{'s' if s != 1 else ''}")
+        return {"value": ", ".join(parts) if parts else "(none)", "meta": ""}
+    if category == "Support":
+        info = details.get("SupportInformation", {})
+        d = (info.get("Description", "") or "").strip()
+        if not d:
+            return {"value": "(no description)", "meta": ""}
+        flags = []
+        if "http://" in d or "https://" in d:
+            flags.append("URL")
+        if "@" in d:
+            flags.append("email")
+        return {"value": _truncate(d, 100), "meta": " + ".join(flags) if flags else "description only"}
+    if category == "Free Trial":
+        return {"value": "Offered" if has_free_trial else "Not offered", "meta": ""}
+    return {"value": "", "meta": ""}
+
+
+def _why_for_tier(category, tier, title, desc, long_desc, highlights, keywords, categories, details, has_free_trial):
+    """Return a one-line explanation of why a category received its tier,
+    used to make the assessment transparent to the seller."""
+    if category == "Title":
+        if not title:
+            return "Title is empty"
+        if tier == "Low":
+            length = len(title)
+            if length < 10:
+                return f"Title is only {length} characters; needs at least 10"
+            if length > 80:
+                return f"Title is {length} characters; trim to 80 or less"
+            return "Title is generic or lacks descriptive terms beyond the brand name"
+        if tier == "Medium":
+            return "Title is in title case but could include more descriptive terms"
+        return "Title is in title case with descriptive terms beyond the brand name"
+    if category == "Short Description":
+        if not desc:
+            return "Short description is empty"
+        length = len(desc)
+        if tier == "Low":
+            if length > 350:
+                return f"Description is {length} characters; trim to 350 or less"
+            if length < 100:
+                return f"Description is only {length} characters; expand to at least 100"
+            return "Description leads with self-promotion (e.g. 'We are', 'Our')"
+        if tier == "Medium":
+            return "Description is value-led but lacks a measurable outcome"
+        return "Description leads with action or includes a measurable outcome"
+    if category == "Highlights":
+        count = len(highlights) if highlights else 0
+        if tier == "Low":
+            if count == 0:
+                return "No highlights provided"
+            if count < 3:
+                return f"{count} of 3 highlights provided"
+            return "Highlights contain generic phrases or are too short"
+        if tier == "Medium":
+            return "3 specific highlights but no measurable outcomes"
+        return "3 specific highlights including at least one measurable claim"
+    if category == "Long Description":
+        if not long_desc or len(long_desc.strip()) < 300:
+            return f"Long description is {len(long_desc.strip()) if long_desc else 0} characters; expand to at least 300"
+        if tier == "Medium":
+            return "Includes one structural element (use case, feature, integration, or compliance)"
+        return "Includes multiple structural elements covering use cases, features, integrations or compliance"
+    if category == "Categories":
+        count = len(categories) if categories else 0
+        return f"{count} of 3 categories selected"
+    if category == "Search Keywords":
+        count = len(keywords) if keywords else 0
+        if tier == "Low":
+            return f"{count} of 3 keywords provided"
+        if tier == "Medium":
+            return f"{count} keywords provided; add more or expand short ones to lift to High"
+        return "3 keywords each with sufficient length"
+    if category == "Title SEO":
+        word_count = len(title.split()) if title else 0
+        if not title:
+            return "Title is empty"
+        if word_count < 3:
+            return f"Title has only {word_count} words; aim for 5 or more"
+        if word_count < 5:
+            return f"Title has {word_count} words; reach 5+ to lift to High"
+        return f"Title has {word_count} words including descriptive terms"
+    if category == "Media / Videos":
+        promo = details.get("PromotionalResources", {})
+        videos = promo.get("Videos", details.get("Videos", []))
+        screenshots = promo.get("Screenshots", details.get("Screenshots", []))
+        additional = promo.get("AdditionalResources", details.get("AdditionalResources", []))
+        v = len(videos) if videos else 0
+        s = (len(screenshots) if screenshots else 0) + (len(additional) if additional else 0)
+        if tier == "Low":
+            if v == 0 and s == 0:
+                return "No media provided"
+            return f"{v} videos, {s} images; add both video and screenshots to lift to High"
+        if tier == "Medium":
+            return f"{v} videos, {s} images; combine video and screenshots to lift to High"
+        return f"{v} videos and {s} images present"
+    if category == "Support":
+        info = details.get("SupportInformation", {})
+        d = (info.get("Description", "") or "").strip()
+        if not d:
+            return "No support description provided"
+        if tier == "Medium":
+            return "Description present with URL or email but not both"
+        if tier == "Low":
+            return "Description present but missing both URL and email"
+        return "Description present with URL and email"
+    if category == "Free Trial":
+        return "Free trial offered" if has_free_trial else "No free trial offered"
+    return ""
 
 
 def tier_title(title):
@@ -338,28 +577,36 @@ SCORED_CATEGORIES = [
 def overall_tier_from_categories(scores):
     """Compute the overall listing tier from per-category tiers.
 
-    With three tiers (Low / Medium / High), we balance two concerns:
-    a single weak field shouldn't drag a strong listing down to Low,
-    but several gaps should still show as Low overall.
+    Uses CATEGORY_WEIGHTS_INTERNAL to weight categories so high-impact fields
+    (Title, Short Description) influence the overall result more than low-
+    impact fields (Categories, Long Description).
 
-    Rules (proportions are over total scored categories):
-    - 30%+ Low                     -> Low
-    - Any Low                      -> Medium
-    - Majority High (>50%) + no Low -> High
-    - Otherwise                    -> Medium"""
+    Rules (calculated against weighted totals, not raw counts):
+    - Weighted Low share >= 30%               -> Low
+    - Any Low                                  -> Medium (single weak field
+                                                  doesn't drag a strong listing
+                                                  to Low)
+    - Weighted High share > 50% (no Low)       -> High
+    - Otherwise                                -> Medium"""
     if not scores:
         return "Low"
-    tiers = [s.get("tier") for s in scores if s.get("tier") in SCORING_TIERS]
-    if not tiers:
+    weighted = []
+    for s in scores:
+        tier = s.get("tier")
+        if tier not in SCORING_TIERS:
+            continue
+        weight = CATEGORY_WEIGHTS_INTERNAL.get(s.get("category"), 1)
+        weighted.append((tier, weight))
+    if not weighted:
         return "Low"
-    total = len(tiers)
-    low_count = tiers.count("Low")
-    high_count = tiers.count("High")
-    if low_count / total >= 0.30:
+    total_weight = sum(w for _, w in weighted)
+    low_weight = sum(w for t, w in weighted if t == "Low")
+    high_weight = sum(w for t, w in weighted if t == "High")
+    if total_weight > 0 and low_weight / total_weight >= 0.30:
         return "Low"
-    if low_count > 0:
+    if low_weight > 0:
         return "Medium"
-    if high_count > total / 2:
+    if total_weight > 0 and high_weight / total_weight > 0.50:
         return "High"
     return "Medium"
 
@@ -1466,6 +1713,24 @@ Respond with ONLY 3 keywords, one per line, no numbering or explanation.""",
             accept="application/json",
         )
         rewrite = json.loads(resp["body"].read())["content"][0]["text"].strip()
+        # Clean up the rewrite so the seller can paste it straight into AMMP:
+        # strip surrounding quotes the model sometimes adds, and remove leading
+        # bullets, dashes, or numbering on each line.
+        rewrite = rewrite.strip("\"' \n\t")
+        cleaned_lines = []
+        for line in rewrite.split("\n"):
+            stripped = line.lstrip()
+            for prefix in ("- ", "* ", "• ", "– ", "— "):
+                if stripped.startswith(prefix):
+                    stripped = stripped[len(prefix):]
+                    break
+            # Strip leading "1. " / "1) " numbering
+            if len(stripped) > 2 and stripped[0].isdigit():
+                rest = stripped[1:].lstrip("0123456789")
+                if rest.startswith((". ", ") ")):
+                    stripped = rest[2:]
+            cleaned_lines.append(stripped)
+        rewrite = "\n".join(cleaned_lines).strip()
         return {"pass": True, "rewrite": rewrite}
     except Exception as e:
         return {"pass": False, "error": str(e)}
@@ -1721,6 +1986,22 @@ def score_listing(body):
     if not has_scmp:
         tips.append({"category": "Standard Contract (SCMP)", "tip": "Consider using the Standard Contract for AWS Marketplace (SCMP) instead of a custom EULA — it can accelerate sales cycles by up to 80% by removing the need for buyers to involve their legal team.", "example": "✓ Action: Select SCMP when configuring your listing's contract terms. Optional addendum templates are available for enhanced security and regulatory compliance."})
 
+    # ── Enrich each scored category with group, value preview, why, benchmark ──
+    for s in scores:
+        cat = s["category"]
+        s["group"] = CATEGORY_GROUPS.get(cat, "Other")
+        preview = _category_value_preview(
+            cat, title, desc, long_desc, highlights, keywords, categories,
+            details, has_free_trial,
+        )
+        s["value"] = preview["value"]
+        s["meta"] = preview["meta"]
+        s["why"] = _why_for_tier(
+            cat, s["tier"], title, desc, long_desc, highlights, keywords,
+            categories, details, has_free_trial,
+        )
+        s["benchmark"] = CATEGORY_BENCHMARKS.get(cat, "")
+
     # ── Compute overall tier ─────────────────────────────────────────────────
     overall = overall_tier_from_categories(scores)
 
@@ -1783,8 +2064,10 @@ Tiers reflect listing effectiveness: 'Low' means the field is missing or signifi
         "long_description": long_desc,
         "highlights": highlights,
         "keywords": keywords,
+        "categories": categories,
         "listing_pricing_model": listing_pricing_model,
         "has_free_trial": has_free_trial,
+        "is_test_listing": _looks_like_test_listing(title, desc),
         "debug_keys": top_keys,
     }
 

@@ -64,6 +64,19 @@
   .tier-pill.tier-low { background: #c0392b; }
   .tier-pill.tier-medium { background: #d68910; }
   .tier-pill.tier-high { background: #1d8348; }
+  .score-group { margin-top: 18px; }
+  .score-group h3 { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 8px; }
+  .score-card { border: 1px solid #e6e6e6; border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; background: white; }
+  .score-card-head { display: flex; align-items: center; gap: 12px; }
+  .score-card-name { flex: 1; font-weight: 600; font-size: 13px; color: #232f3e; }
+  .score-card-meta { font-size: 11px; color: #888; flex-shrink: 0; }
+  .score-card-value { font-size: 12px; color: #555; margin-top: 6px; line-height: 1.5; padding: 6px 10px; background: #f8f9fa; border-radius: 4px; border-left: 2px solid #ddd; }
+  .score-card-value.empty { color: #999; font-style: italic; }
+  .score-card-why { font-size: 12px; color: #666; margin-top: 6px; }
+  .score-card-bench { font-size: 11px; color: #888; margin-top: 4px; font-style: italic; }
+  .score-card-tier-change { font-size: 11px; font-weight: 600; margin-left: 8px; padding: 2px 6px; border-radius: 3px; }
+  .score-card-tier-change.up { background: #e8f5e9; color: #1d8348; }
+  .score-card-tier-change.down { background: #fdecea; color: #c0392b; }
   .tip-item { border-left: 3px solid #ff9900; padding: 10px 14px; margin-bottom: 10px; background: #fffaf0; border-radius: 0 4px 4px 0; font-size: 13px; }
   .tip-item strong { display: block; margin-bottom: 2px; color: #232f3e; }
   pre.example { font-size: 12px; background: #f4f4f4; border-left: 3px solid #ccc; padding: 8px 10px; margin-top: 8px; border-radius: 0 4px 4px 0; white-space: pre-wrap; font-family: inherit; color: #444; }
@@ -78,6 +91,14 @@
   .toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
   .toolbar button { font-size: 13px; background: white; border: 1px solid #ccc; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
   .toolbar button:hover { border-color: #ff9900; color: #ff9900; }
+  @media print {
+    header, .tabs, .toolbar, .rewrite-btn, .ammp-link, button { display: none !important; }
+    body { background: white; color: black; }
+    .card { border: none; box-shadow: none; padding: 0; }
+    .score-card { break-inside: avoid; }
+    .tip-item { break-inside: avoid; border-left-color: #999; }
+    .tier-pill, .tier-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
 </style>
 </head>
 <body>
@@ -865,26 +886,72 @@ function renderScoreResults(result, entityId) {
   }[tier] || "";
 
   const saved = JSON.parse(localStorage.getItem("mp-tester-done") || "[]");
+  const tierHistory = JSON.parse(localStorage.getItem("mp-tester-tier-history") || "{}");
+  const lastTiers = tierHistory[entityId] || {};
 
-  const bars = result.scores.map(sc => {
-    const pillClass = `tier-${sc.tier.toLowerCase()}`;
-    return `<div class="score-bar-row">
-      <div class="score-bar-label">${sc.category}</div>
-      <span class="tier-pill ${pillClass}">${sc.tier}</span>
-    </div>`;
-  }).join("");
+  // Save current tiers for next-run diff
+  const currentTiers = {};
+  result.scores.forEach(sc => { currentTiers[sc.category] = sc.tier; });
+  tierHistory[entityId] = currentTiers;
+  localStorage.setItem("mp-tester-tier-history", JSON.stringify(tierHistory));
 
+  // Group scores by their group label, preserving the input order within groups
+  const groupOrder = ["Content", "Discoverability", "Buyer Experience"];
+  const grouped = {};
+  result.scores.forEach(sc => {
+    const g = sc.group || "Other";
+    if (!grouped[g]) grouped[g] = [];
+    grouped[g].push(sc);
+  });
+  const tierIdx = { "Low": 0, "Medium": 1, "High": 2 };
+
+  const groupSections = groupOrder
+    .filter(g => grouped[g])
+    .map(g => {
+      const cards = grouped[g].map(sc => {
+        const pillClass = `tier-${sc.tier.toLowerCase()}`;
+        const last = lastTiers[sc.category];
+        let change = "";
+        if (last && last !== sc.tier) {
+          const dir = (tierIdx[sc.tier] > tierIdx[last]) ? "up" : "down";
+          const arrow = dir === "up" ? "↑" : "↓";
+          change = `<span class="score-card-tier-change ${dir}" title="Was ${last} last run">${arrow} from ${escapeHtml(last)}</span>`;
+        }
+        const valueText = sc.value || "";
+        const valueClass = (valueText.startsWith("(") || !valueText) ? "score-card-value empty" : "score-card-value";
+        return `<div class="score-card">
+          <div class="score-card-head">
+            <div class="score-card-name">${escapeHtml(sc.category)}${change}</div>
+            ${sc.meta ? `<div class="score-card-meta">${escapeHtml(sc.meta)}</div>` : ""}
+            <span class="tier-pill ${pillClass}">${escapeHtml(sc.tier)}</span>
+          </div>
+          ${valueText ? `<div class="${valueClass}">${escapeHtml(valueText)}</div>` : ""}
+          ${sc.why ? `<div class="score-card-why">${escapeHtml(sc.why)}</div>` : ""}
+          ${sc.benchmark ? `<div class="score-card-bench">${escapeHtml(sc.benchmark)}</div>` : ""}
+        </div>`;
+      }).join("");
+      return `<div class="score-group"><h3>${escapeHtml(g)}</h3>${cards}</div>`;
+    }).join("");
+
+  // Build a deep link into AMMP scoped to the seller's listing where possible.
+  // AMMP supports deep linking via product-id query parameter on the products page.
+  const ammpProductBase = entityId
+    ? `https://aws.amazon.com/marketplace/management/products/saas?product-id=${encodeURIComponent(entityId)}`
+    : "https://aws.amazon.com/marketplace/management/products/saas";
   const ammpLinks = {
-    "Title": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
-    "Description": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
-    "Highlights": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
-    "SEO / Keywords": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
-    "Search Keywords": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
-    "Media / Videos": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
-    "Free Trial": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
+    "Title": ammpProductBase,
+    "Short Description": ammpProductBase,
+    "Highlights": ammpProductBase,
+    "Long Description": ammpProductBase,
+    "Categories": ammpProductBase,
+    "Search Keywords": ammpProductBase,
+    "Title SEO": ammpProductBase,
+    "Media / Videos": ammpProductBase,
+    "Free Trial": ammpProductBase,
+    "Support": ammpProductBase,
+    "Pricing Strategy": ammpProductBase,
+    "Standard Contract (SCMP)": ammpProductBase,
     "Vendor Insights": "https://partnercentral.awspartner.com/partnercentral2/s/vendor-insights",
-    "Standard Contract (SCMP)": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
-    "Quick Launch": "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard",
     "Reviews (G2 / Peerspot)": "https://www.g2.com/",
   };
 
@@ -893,7 +960,7 @@ function renderScoreResults(result, entityId) {
   const tips = result.tips.map((t, i) => {
     const isDone = saved.includes(`${entityId}-${t.category}`);
     const rewriteField = rewritableFields[t.category];
-    const ammpUrl = ammpLinks[t.category] || "https://us-east-1.console.aws.amazon.com/partnercentral/dashboard";
+    const ammpUrl = ammpLinks[t.category] || ammpProductBase;
     const perHighlight = (t.per_highlight && Array.isArray(t.per_highlight))
       ? t.per_highlight.filter(h => h.feedback).map(h =>
           `<div style="margin:6px 0 6px 24px;padding:6px 10px;background:#fff5e6;border-left:2px solid #d68910;border-radius:0 4px 4px 0;font-size:12px">
@@ -917,7 +984,13 @@ function renderScoreResults(result, entityId) {
   }).join("");
 
   const resultsEl = document.getElementById("scoreResults");
+  const testBanner = result.is_test_listing ? `
+    <div style="background:#fffaf0;border:1px solid #ff9900;border-radius:6px;padding:10px 14px;margin:0 0 12px;font-size:12px;color:#8a4500;line-height:1.6">
+      <strong>This looks like a test or demo listing.</strong> The effectiveness assessment is calibrated for live customer-facing listings, so scores will reflect that. Replace placeholder content with real product information to get an accurate read.
+    </div>
+  ` : "";
   setHTML(resultsEl, `
+    ${testBanner}
     <div class="score-hero">
       <div class="tier-badge ${tierClass}">${tier}</div>
       <div class="score-label" style="font-weight:600;font-size:14px;margin:8px 0 4px">${escapeHtml(result.product_title) || entityId}</div>
@@ -928,6 +1001,7 @@ function renderScoreResults(result, entityId) {
       <button onclick="rescoreListing()">↻ Re-score</button>
       <button onclick="exportReport()">⬇ Export report</button>
       <button onclick="copyReport()">⎘ Copy to clipboard</button>
+      <button onclick="window.print()">🖨 Print / PDF</button>
       <button onclick="toggleScoringLegend()" id="legendBtn" style="position:relative">ⓘ How tiers work</button>
     </div>
     <div id="scoringLegend" style="display:none;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;margin-bottom:16px;font-size:12px;line-height:1.7;color:#555">
@@ -939,7 +1013,7 @@ function renderScoreResults(result, entityId) {
       </div>
       <div style="margin-top:10px;color:#777">Tiers are derived from deterministic checks (length, structure, completeness, generic-phrase detection). Static recommendations (Reviews, Vendor Insights, SCMP, Pricing Strategy) appear regardless of tier and are not used to compute the overall result.</div>
     </div>
-    <div class="score-bars">${bars}</div>
+    <div class="score-bars">${groupSections}</div>
     ${tips ? `<h2 style="font-size:15px;font-weight:600;margin:20px 0 12px;color:#232f3e">Recommendations</h2>${tips}` : '<p style="color:#1d8348;font-size:13px;margin-top:16px">✓ No recommendations — your listing looks great!</p>'}
   `);
 }
@@ -947,6 +1021,15 @@ function renderScoreResults(result, entityId) {
 function toggleScoringLegend() {
   const el = document.getElementById("scoringLegend");
   if (el) el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+function copyRewrite(btn) {
+  const text = btn.previousElementSibling.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const original = btn.textContent;
+    btn.textContent = "✓ Copied!";
+    setTimeout(() => { btn.textContent = original; }, 2000);
+  });
 }
 
 function toggleDone(entityId, category, idx, checked) {
@@ -977,7 +1060,7 @@ async function rewriteField(field, tipIdx) {
     const r = await callApi(endpoint, "rewrite_field", { field, current: currentMap[field] || "", context });
     if (!r.pass) { setHTML(container, `<p style="color:#c0392b;font-size:12px">${escapeHtml(r.error)}</p>`); return; }
     setHTML(container, `<div class="rewrite-output">${escapeHtml(r.rewrite)}</div>
-      <button class="rewrite-copy" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);this.textContent='Copied!'">Copy</button>`);
+      <button class="rewrite-copy" onclick="copyRewrite(this)">⎘ Copy to paste into AMMP</button>`);
   } catch(e) {
     setHTML(container, `<p style="color:#c0392b;font-size:12px">Failed: ${e.message}</p>`);
   }
@@ -999,7 +1082,13 @@ async function rescoreListing() {
 function exportReport() {
   const result = window._lastScoreResult;
   if (!result) return;
-  const formatScore = (s) => `${s.category}: ${s.tier}`;
+  const formatScore = (s) => {
+    let line = `${s.category}: ${s.tier}`;
+    if (s.meta) line += ` (${s.meta})`;
+    if (s.value && !s.value.startsWith("(")) line += `\n  Value: ${s.value}`;
+    if (s.why) line += `\n  Why: ${s.why}`;
+    return line;
+  };
   const lines = [
     `AWS Marketplace Listing Effectiveness Report`,
     `Product: ${result.product_title}`,
@@ -1030,7 +1119,11 @@ function exportReport() {
 function copyReport() {
   const result = window._lastScoreResult;
   if (!result) return;
-  const formatScore = (s) => `${s.category}: ${s.tier}`;
+  const formatScore = (s) => {
+    let line = `${s.category}: ${s.tier}`;
+    if (s.meta) line += ` (${s.meta})`;
+    return line;
+  };
   const lines = [
     `AWS Marketplace Listing Effectiveness Report`,
     `Product: ${result.product_title} | Tier: ${result.overall_tier}`,
