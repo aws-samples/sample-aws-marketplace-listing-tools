@@ -25,8 +25,8 @@ All API calls run within the seller's own AWS account. No credentials leave thei
 |-----------|----------|---------|
 | Frontend | S3 + CloudFront | Single-page HTML UI, no build step |
 | API | API Gateway HTTP API | Routes POST /test to Lambda |
-| Backend | Lambda (Python 3.12) | Integration tests, listing scorer, AI rewrites |
-| AI | Amazon Bedrock (Claude 3 Haiku) | Listing quality scoring and rewrite suggestions |
+| Backend | Lambda (Python 3.12) | Integration tests, listing tier assessment, AI rewrites |
+| AI | Amazon Bedrock (Claude 3 Haiku) | Executive summary and rewrite suggestions |
 
 ## How it works
 

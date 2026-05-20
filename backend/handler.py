@@ -66,179 +66,326 @@ GUIDELINES = {
     },
 }
 
-SCORING_RUBRICS = {
-    "title": {
-        "bands": [
-            {"range": [0, 29], "label": "Needs Attention",
-             "criteria": "Missing, generic (e.g. 'Solution', 'Platform'), or not in title case. Buyer cannot identify the product."},
-            {"range": [30, 59], "label": "Fair",
-             "criteria": "Product identifiable but title case inconsistent, contains hyperbole, or missing brand name. Not optimised for search."},
-            {"range": [60, 79], "label": "Good",
-             "criteria": "Proper title case, brand name present, product identifiable. Minor issues: could be more specific or searchable."},
-            {"range": [80, 100], "label": "Optimised",
-             "criteria": "Title case, brand name, product clearly identifiable, includes searchable category terms, no hyperbole, under 80 chars."},
-        ],
-    },
-    "short_description": {
-        "bands": [
-            {"range": [0, 29], "label": "Needs Attention",
-             "criteria": "Missing, over 350 chars, starts with 'We'/'Our', or contains hyperbole and redirect language."},
-            {"range": [30, 59], "label": "Fair",
-             "criteria": "Present and under 350 chars but leads with company name, lacks specificity, or contains unnecessary capitalisation."},
-            {"range": [60, 79], "label": "Good",
-             "criteria": "Under 350 chars, leads with value/problem, avoids self-promotion. Could be more specific about outcomes or use cases."},
-            {"range": [80, 100], "label": "Optimised",
-             "criteria": "Under 350 chars, leads with problem solved, specific outcomes, no hyperbole, no redirects, benefit-focused."},
-        ],
-    },
-    "highlights": {
-        "bands": [
-            {"range": [0, 29], "label": "Needs Attention",
-             "criteria": "Missing or only 1 highlight. Content is generic (e.g. 'Easy to use') with no metrics or specifics."},
-            {"range": [30, 59], "label": "Fair",
-             "criteria": "2-3 highlights present but mostly generic phrases, lacking metrics, or not aligned with product value proposition."},
-            {"range": [60, 79], "label": "Good",
-             "criteria": "3 highlights present, mostly specific, some metrics. Minor issues: one or more highlights could be more benefit-driven."},
-            {"range": [80, 100], "label": "Optimised",
-             "criteria": "3 highlights, each specific with measurable outcomes, aligned to product value proposition, no generic phrases."},
-        ],
-    },
+SCORING_TIERS = ["Needs Attention", "Needs Improvement", "Good", "High Standard"]
+
+# Generic words that indicate a weak product title when used alone or without
+# a brand identifier alongside them.
+_GENERIC_TITLE_WORDS = {
+    "solution", "platform", "product", "software", "tool", "tools",
+    "service", "services", "system", "systems", "app", "application",
+    "test", "demo", "sample", "any", "anycompany",
 }
 
-CATEGORY_WEIGHTS = {
-    "Title":                 10,
-    "Short Description":     10,
-    "Highlights":             9,
-    "Long Description":       6,
-    "Search Keywords":        7,
-    "Categories":             3,
-    "Media / Videos":         7,
-    "Support":                4,
-    "Free Trial":             9,
-    "Pay-As-You-Go Pricing":  6,
-    "Contract Pricing":       4,
-    "Title SEO":              5,
-}
+# Words that suggest the description leads with self-promotion rather than
+# value or problem solved.
+_DESC_SELF_START = ("we ", "our ", "i ", "the company ", "this product ", "this is ")
+
+# Heuristic markers that a description leads with action or specific outcome.
+_DESC_VALUE_MARKERS = (
+    "automatically", "automate", "reduce", "reduces", "monitor", "monitors",
+    "detect", "detects", "scan", "scans", "secure", "secures", "manage",
+    "manages", "deliver", "delivers", "accelerate", "accelerates", "track",
+    "tracks", "build", "builds", "deploy", "deploys", "analyse", "analyses",
+    "analyze", "analyzes", "optimise", "optimises", "optimize", "optimizes",
+    "%",
+)
 
 
-def get_band_label(field, score):
-    """Look up the score band label from SCORING_RUBRICS for a given field and numeric score.
-    Returns None if field not in rubrics or no matching band."""
-    rubric = SCORING_RUBRICS.get(field)
-    if not rubric:
-        return None
-    for band in rubric["bands"]:
-        low, high = band["range"]
-        if low <= score <= high:
-            return band["label"]
-    return None
+def _has_metric(text):
+    """Return True if text contains a number, percentage, or 'x' multiplier
+    that suggests a measurable claim. Used to differentiate Good from
+    High Standard for highlights."""
+    if not text:
+        return False
+    lower = text.lower()
+    if "%" in lower or "x " in lower or "x." in lower:
+        return True
+    return any(c.isdigit() for c in lower)
 
 
-# ── Graduated Rule-Based Scoring Functions ───────────────────────────────────
+def tier_title(title):
+    """Return the tier for the product title.
 
-def score_media(details):
-    """Graduated media scoring: 0=none, 30=screenshots only, 60=multiple screenshots,
-    80=has video, 100=video+screenshots."""
+    Needs Attention   — empty
+    Needs Improvement — too short, too long, or contains generic words alone
+    Good              — adequate length and case but lacks descriptive terms
+    High Standard     — title case, descriptive, no generics, within length"""
+    if not title or not title.strip():
+        return "Needs Attention"
+    t = title.strip()
+    length = len(t)
+    if length < 10 or length > 80:
+        return "Needs Improvement"
+    words = t.split()
+    if len(words) < 2:
+        return "Needs Improvement"
+    lower_words = [w.lower().strip(" ,.-—:") for w in words]
+    # Reject titles that are only generic words (e.g. "Test Solution")
+    if all(w in _GENERIC_TITLE_WORDS or len(w) <= 2 for w in lower_words):
+        return "Needs Attention"
+    # Reject all-lowercase titles
+    if t == t.lower():
+        return "Needs Improvement"
+    # Title case check — at least 60% of significant words start uppercase
+    significant_words = [w for w in words if len(w) > 2]
+    if significant_words:
+        cased = sum(1 for w in significant_words if w[0].isupper())
+        if cased < len(significant_words) * 0.6:
+            return "Needs Improvement"
+    # High Standard requires descriptive content beyond a single brand word.
+    # Look for at least one descriptive (non-generic, non-tiny) word in addition
+    # to whatever brand or generic is present.
+    descriptive_words = [
+        w for w in lower_words
+        if len(w) > 3 and w not in _GENERIC_TITLE_WORDS
+    ]
+    if len(descriptive_words) >= 2 and length <= 80:
+        return "High Standard"
+    return "Good"
+
+
+def tier_short_description(desc):
+    """Return the tier for the short description.
+
+    Needs Attention   — empty or over 350 characters (guideline violation)
+    Needs Improvement — under 100 chars or leads with self-promotion
+    Good              — within length, leads with value
+    High Standard     — within length, leads with strong value verb or metric"""
+    if not desc or not desc.strip():
+        return "Needs Attention"
+    t = desc.strip()
+    length = len(t)
+    if length > 350:
+        return "Needs Attention"
+    if length < 100:
+        return "Needs Improvement"
+    lower = t.lower()
+    if lower.startswith(_DESC_SELF_START):
+        return "Needs Improvement"
+    # High Standard: leads with action / value verb or contains a metric
+    first_word = lower.split()[0] if lower.split() else ""
+    if first_word in _DESC_VALUE_MARKERS or any(m in lower for m in _DESC_VALUE_MARKERS):
+        return "High Standard"
+    return "Good"
+
+
+def tier_highlights(highlights):
+    """Return the tier for product highlights.
+
+    Needs Attention   — none
+    Needs Improvement — fewer than 3 or all generic
+    Good              — 3 highlights, specific, no generics
+    High Standard     — 3 highlights, specific, contain measurable claims"""
+    if not highlights:
+        return "Needs Attention"
+    items = [str(h).strip() for h in highlights if str(h).strip()]
+    if len(items) < 3:
+        return "Needs Improvement"
+    generic_phrases = GUIDELINES["highlights"]["generic_phrases"]
+    has_generic = any(
+        any(gp in h.lower() for gp in generic_phrases)
+        for h in items
+    )
+    if has_generic:
+        return "Needs Improvement"
+    if any(len(h) < 30 for h in items):
+        return "Needs Improvement"
+    # High Standard requires at least one highlight with a measurable claim
+    if any(_has_metric(h) for h in items):
+        return "High Standard"
+    return "Good"
+
+
+def tier_categories(categories):
+    """Return the tier for marketplace categories.
+
+    Needs Attention   — none
+    Needs Improvement — 1 of 3
+    Good              — 2 of 3
+    High Standard     — 3 of 3 (the maximum)"""
+    if not categories:
+        return "Needs Attention"
+    count = len(categories)
+    if count == 1:
+        return "Needs Improvement"
+    if count == 2:
+        return "Good"
+    return "High Standard"
+
+
+def tier_keywords(keywords):
+    """Return the tier for search keywords.
+
+    Needs Attention   — none
+    Needs Improvement — 1 keyword
+    Good              — 2 keywords or 3 short keywords
+    High Standard     — 3 keywords each at least 5 characters"""
+    if not keywords:
+        return "Needs Attention"
+    count = len(keywords)
+    if count == 1:
+        return "Needs Improvement"
+    if count == 2:
+        return "Good"
+    # 3 or more
+    if all(len(kw.strip()) >= 5 for kw in keywords):
+        return "High Standard"
+    return "Good"
+
+
+def tier_long_description(text):
+    """Return the tier for long description.
+
+    Needs Attention   — empty or under 150 chars
+    Needs Improvement — under 300 chars
+    Good              — 300+ with at least one structure indicator
+    High Standard     — 300+ with multiple structure indicators"""
+    if not text or not text.strip():
+        return "Needs Attention"
+    length = len(text.strip())
+    if length < 150:
+        return "Needs Attention"
+    if length < 300:
+        return "Needs Improvement"
+    lower_text = text.lower()
+    structure_indicators = ["use case", "feature", "integration", "compliance", "benefit"]
+    matches = sum(1 for ind in structure_indicators if ind in lower_text)
+    if matches >= 2:
+        return "High Standard"
+    if matches >= 1:
+        return "Good"
+    return "Needs Improvement"
+
+
+def tier_media(details):
+    """Return the tier for media (screenshots and videos).
+
+    Needs Attention   — no media
+    Needs Improvement — single screenshot
+    Good              — multiple screenshots, no video
+    High Standard     — video plus screenshots"""
     promo = details.get("PromotionalResources", {})
     videos = promo.get("Videos", details.get("Videos", []))
     screenshots = promo.get("Screenshots", details.get("Screenshots", []))
     additional = promo.get("AdditionalResources", details.get("AdditionalResources", []))
 
     has_video = bool(videos and len(videos) > 0)
-    screenshot_count = len(screenshots) if screenshots else 0
-    additional_count = len(additional) if additional else 0
-    total_images = screenshot_count + additional_count
-    has_screenshots = total_images > 0
+    total_images = (len(screenshots) if screenshots else 0) + (len(additional) if additional else 0)
 
-    if has_video and has_screenshots:
-        return 100
-    if has_video:
-        return 80
-    if total_images > 1:
-        return 60
-    if has_screenshots:
-        return 30
-    return 0
+    if has_video and total_images > 0:
+        return "High Standard"
+    if has_video or total_images >= 2:
+        return "Good"
+    if total_images == 1:
+        return "Needs Improvement"
+    return "Needs Attention"
 
 
-def score_keywords(keywords):
-    """Graduated keyword scoring: 0=none, 30=1 keyword, 60=2 keywords,
-    80=3+ keywords with any short ones, 100=3+ keywords all with sufficient length (>=5 chars)."""
-    if not keywords:
-        return 0
-    count = len(keywords)
-    if count == 1:
-        return 30
-    if count == 2:
-        return 60
-    # 3 or more keywords
-    all_sufficient = all(len(kw.strip()) >= 5 for kw in keywords)
-    if all_sufficient:
-        return 100
-    return 80
+def tier_support(details):
+    """Return the tier for support information.
 
-
-def score_long_description(text):
-    """Graduated long description scoring: 0=empty, 30=under 150 chars, 50=under 300 chars,
-    70=300+ basic, 85=300+ with structure indicators, 100=300+ with multiple structure indicators."""
-    if not text or not text.strip():
-        return 0
-    length = len(text.strip())
-    if length < 150:
-        return 30
-    if length < 300:
-        return 50
-    # 300+ characters — check for structure indicators
-    lower_text = text.lower()
-    structure_indicators = ["use case", "feature", "integration", "compliance"]
-    matches = sum(1 for indicator in structure_indicators if indicator in lower_text)
-    if matches >= 2:
-        return 100
-    if matches >= 1:
-        return 85
-    return 70
-
-
-def score_support(details):
-    """Graduated support scoring: 0=none, 40=description only,
-    70=description+URL or email, 100=description+URL+email."""
+    Needs Attention   — no support description
+    Needs Improvement — description only
+    Good              — description with URL or email
+    High Standard     — description with URL and email"""
     support_info = details.get("SupportInformation", {})
     description = support_info.get("Description", "")
     if not description or not description.strip():
-        return 0
+        return "Needs Attention"
     text = description.strip()
     has_url = "http://" in text or "https://" in text
     has_email = "@" in text
     if has_url and has_email:
-        return 100
+        return "High Standard"
     if has_url or has_email:
-        return 70
-    return 40
+        return "Good"
+    return "Needs Improvement"
 
 
-def score_free_trial(has_trial, has_payg):
-    """Free trial scoring: 0=no trial, 70=trial only, 100=trial+PAYG."""
-    if not has_trial:
-        return 0
-    if has_payg:
-        return 100
-    return 70
+def tier_free_trial(has_trial):
+    """Return the tier for free trial presence.
+
+    Needs Improvement — no free trial
+    High Standard     — free trial offered
+
+    Free trial is recommended regardless of pricing model: AWS Marketplace data
+    shows 25% of buyers consider free trials essential before purchase, and
+    free-trial-to-paid conversion rates are materially higher than direct buy."""
+    return "High Standard" if has_trial else "Needs Improvement"
 
 
-def score_payg(has_payg, has_contract):
-    """PAYG scoring: 0=no PAYG, 70=PAYG only, 100=PAYG+contract."""
-    if not has_payg:
-        return 0
-    if has_contract:
-        return 100
-    return 70
+def tier_title_seo(title):
+    """Return the tier for title SEO.
+
+    Needs Attention   — empty
+    Needs Improvement — fewer than 3 words
+    Good              — 3 to 4 words
+    High Standard     — 5+ words with at least one descriptive term beyond brand"""
+    if not title or not title.strip():
+        return "Needs Attention"
+    words = title.strip().split()
+    word_count = len(words)
+    if word_count < 3:
+        return "Needs Improvement"
+    if word_count < 5:
+        return "Good"
+    # 5+ words — check for descriptive terms beyond a single brand name
+    lower_words = [w.lower().strip(" ,.-—:") for w in words]
+    descriptive = [
+        w for w in lower_words
+        if len(w) > 3 and w not in _GENERIC_TITLE_WORDS
+    ]
+    if len(descriptive) >= 2:
+        return "High Standard"
+    return "Good"
 
 
-def score_contract(has_contract):
-    """Contract scoring: 0=no contract, 100=has contract."""
-    if has_contract:
-        return 100
-    return 0
+# Order of categories used to compute the overall listing tier and to display
+# results consistently. Each category returns one of SCORING_TIERS values.
+SCORED_CATEGORIES = [
+    "Title",
+    "Short Description",
+    "Highlights",
+    "Long Description",
+    "Categories",
+    "Search Keywords",
+    "Media / Videos",
+    "Support",
+    "Free Trial",
+    "Title SEO",
+]
+
+
+def overall_tier_from_categories(scores):
+    """Compute the overall listing tier from per-category tiers.
+
+    The overall tier is determined by the worst category, with two exceptions:
+    - A single 'Needs Improvement' or 'Needs Attention' among otherwise strong
+      categories does not pull the whole listing down further than 'Good'.
+    - The overall tier cannot exceed the median tier of all categories.
+
+    This rewards listings that are broadly strong while still flagging when
+    multiple gaps need attention."""
+    if not scores:
+        return "Needs Attention"
+    tier_index = {t: i for i, t in enumerate(SCORING_TIERS)}
+    indices = [tier_index[s["tier"]] for s in scores if s.get("tier") in tier_index]
+    if not indices:
+        return "Needs Attention"
+    indices.sort()
+    median_idx = indices[len(indices) // 2]
+    worst_idx = indices[0]
+    needs_attention_count = sum(1 for i in indices if i == 0)
+    needs_improvement_count = sum(1 for i in indices if i == 1)
+    if needs_attention_count >= 2:
+        return "Needs Attention"
+    if needs_attention_count == 1 and needs_improvement_count >= 2:
+        return "Needs Attention"
+    if needs_attention_count == 1 or needs_improvement_count >= 3:
+        return "Needs Improvement"
+    if median_idx >= 3 and worst_idx >= 2:
+        return "High Standard"
+    return "Good"
 
 
 # ── Product Context Derivation ───────────────────────────────────────────────
@@ -1361,10 +1508,10 @@ def score_listing(body):
     # Log the top-level keys to help debug field names
     top_keys = list(details.keys())
 
-    # ── Task 5.3: Derive product context ─────────────────────────────────────
+    # ── Derive product context (used for AI summary and rewrites) ─────────────
     product_context = derive_product_context(details)
 
-    # ── Task 5.1: Build guidelines text from GUIDELINES module constant ──────
+    # ── Build guidelines text for the AI executive summary prompt ─────────────
     guidelines_text = "AWS MARKETPLACE OFFICIAL LISTING GUIDELINES:\n\n"
     for section_key, section_data in GUIDELINES.items():
         if section_key == "plg":
@@ -1393,211 +1540,109 @@ def score_listing(body):
                 return ""
         return d or ""
 
-    # ── Title ────────────────────────────────────────────────────────────────
+    # ── Extract content fields ───────────────────────────────────────────────
     title = (get_nested(details, "Description", "ProductTitle") or
              get_nested(details, "Description", "Title") or
              get_nested(details, "ProductTitle") or
              get_nested(details, "Name") or "")
-    title_score = 0
-    if title:
-        title_score += 30
-        if len(title) >= 10: title_score += 20
-        if title[0].isupper(): title_score += 20
-        words = title.split()
-        if sum(1 for w in words if w[0].isupper()) >= len(words) * 0.6: title_score += 30
-        if title_score < 70:
-            tips.append({"category": "Title", "tip": "Use title case and ensure the title clearly identifies what your product does.", "example": "✓ Good: \"Datadog — Cloud Monitoring & Security Platform\"\n✗ Avoid: \"Our Amazing Software v2.0\" or \"datadog monitoring tool\""})
-    else:
-        tips.append({"category": "Title", "tip": "Product title not found.", "example": "✓ Good: \"Splunk Enterprise Security — SIEM & Threat Detection\""})
-    scores.append({"category": "Title", "score": title_score})
-
-    # ── Short Description ────────────────────────────────────────────────────
     desc = (get_nested(details, "Description", "ShortDescription") or
             get_nested(details, "Description", "LongDescription") or
             get_nested(details, "ShortDescription") or "")
-    desc_score = 0
-    if desc:
-        desc_score += 30
-        if len(desc) >= 100: desc_score += 20
-        if len(desc) <= 350: desc_score += 20
-        if not str(desc).startswith(("We ", "Our ", "I ")): desc_score += 30
-        if len(desc) > 350:
-            tips.append({"category": "Short Description", "tip": f"Description is {len(desc)} chars — trim to 350 or less.", "example": "✓ Keep it under 350 characters and lead with the problem solved, not your company name."})
-        elif desc_score < 80:
-            tips.append({"category": "Short Description", "tip": "Lead with the problem you solve, not your company name. Focus on buyer benefits.", "example": "✓ Good: \"Automatically detect and respond to cloud threats across AWS, Azure, and GCP — no agents required.\"\n✗ Avoid: \"We are a leading cybersecurity company offering our award-winning platform.\""})
-    else:
-        tips.append({"category": "Short Description", "tip": "Short description is missing — this is the first thing buyers read.", "example": "✓ Good: \"Automatically detect and respond to cloud threats across AWS, Azure, and GCP — no agents required.\""})
-    scores.append({"category": "Short Description", "score": desc_score})
-
-    # ── Highlights ───────────────────────────────────────────────────────────
+    long_desc = (get_nested(details, "Description", "LongDescription") or
+                 get_nested(details, "LongDescription") or "")
     highlights = (details.get("Description", {}).get("Highlights") or
                   details.get("Highlights") or [])
-    hl_score = 0
-    if len(highlights) >= 3:
-        hl_score = 70
-        if all(len(str(h)) > 30 for h in highlights): hl_score = 100
-        if hl_score < 100:
-            tips.append({"category": "Highlights", "tip": "Make each highlight specific and benefit-driven. Highlights are a key search ranking field.", "example": "✓ Good: \"Reduce MTTR by 60% with AI-powered root cause analysis across your entire stack\"\n✗ Avoid: \"Easy to use\" or \"Scalable and reliable solution\""})
-    elif len(highlights) > 0:
-        hl_score = 30
-        tips.append({"category": "Highlights", "tip": f"You have {len(highlights)} of 3 highlights. Add all 3 — highlights are a key search ranking field.", "example": "✓ Each highlight should cover a distinct benefit: cost savings, time savings, or risk reduction with a specific metric."})
-    else:
-        tips.append({"category": "Highlights", "tip": "No highlights found. Add 3 bullet points — highlights are one of 6 key AWS Marketplace search ranking fields.", "example": "✓ \"Cut infrastructure costs by up to 40% with automated rightsizing\"\n✓ \"Deploy in under 5 minutes with one-click Quick Launch\"\n✓ \"SOC 2 Type II certified — meet compliance requirements out of the box\""})
-
-    # ── Task 6.1: Generic phrase penalty for highlights ──────────────────────
-    if highlights:
-        generic_phrases = GUIDELINES["highlights"]["generic_phrases"]
-        for h in highlights:
-            h_lower = str(h).lower()
-            if any(gp in h_lower for gp in generic_phrases):
-                hl_score = max(0, hl_score - 15)
-                break  # Apply penalty once regardless of how many highlights contain generic phrases
-
-    scores.append({"category": "Highlights", "score": hl_score})
-
-    # ── AI quality assessment (title, description, highlights) ───────────────
-    # ── Task 5.4: Include full rubric definitions in AI scoring prompt ────────
-    ai_scores = {}
-    ai_feedback = {}
-
-    # Build rubric text for the AI prompt
-    rubric_text = "SCORING RUBRIC DEFINITIONS:\n\n"
-    for field_key, rubric_data in SCORING_RUBRICS.items():
-        rubric_text += f"{field_key.upper().replace('_', ' ')}:\n"
-        for band in rubric_data["bands"]:
-            rubric_text += f"  {band['range'][0]}-{band['range'][1]} ({band['label']}): {band['criteria']}\n"
-        rubric_text += "\n"
-
-    try:
-        bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
-        prompt = f"""You are an AWS Marketplace listing quality evaluator. Score each field against the official AWS Marketplace guidelines, PLG best practices, and the structured scoring rubric provided below.
-
-{guidelines_text}
-
-{rubric_text}
-
-Product context: {product_context["summary"]}
-
-Now evaluate this listing:
-
-Product Title: {title or "(empty)"}
-Short Description: {desc or "(empty)"}
-Highlights: {json.dumps(highlights) if highlights else "(empty)"}
-
-Score each field 0-100 based on the scoring rubric bands defined above. Use the criteria for each band to determine the appropriate score range. Provide one specific improvement tip and a concrete example for each, tailored to this product's domain ({product_context["industry"]}).
-
-Respond ONLY with valid JSON in this exact format:
-{{
-  "title": {{"score": 0-100, "tip": "...", "example": "..."}},
-  "description": {{"score": 0-100, "tip": "...", "example": "..."}},
-  "highlights": {{"score": 0-100, "tip": "...", "example": "...", "per_highlight": [{{"index": 0, "text": "...", "feedback": "..." or null}}, ...]}}
-}}
-
-For the highlights "per_highlight" array: assess each highlight individually. For each highlight, provide its 0-based index, the original text, and specific feedback on how to improve it (or null if the highlight is already strong). Focus on specificity, measurable outcomes, and alignment with the product's value proposition.
-
-Score against the defined criteria per band. A score of 80+ means the field meets all "Optimised" criteria. A score of 60-79 means "Good" with minor issues. A score of 30-59 means "Fair" with significant room for improvement. Below 30 means "Needs Attention" with critical issues."""
-
-        resp = bedrock.invoke_model(
-            modelId="anthropic.claude-3-haiku-20240307-v1:0",
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1024,
-                "temperature": 0,
-                "messages": [{"role": "user", "content": prompt}]
-            }),
-            contentType="application/json",
-            accept="application/json",
-        )
-        result_text = json.loads(resp["body"].read())["content"][0]["text"]
-        ai_result = json.loads(result_text)
-        for field in ["title", "description", "highlights"]:
-            ai_scores[field] = ai_result[field]["score"]
-            ai_feedback[field] = {"tip": ai_result[field]["tip"], "example": ai_result[field]["example"]}
-            # ── Task 6.2: Capture per-highlight feedback from AI response ─────
-            if field == "highlights" and "per_highlight" in ai_result[field]:
-                ai_feedback[field]["per_highlight"] = ai_result[field]["per_highlight"]
-    except Exception as e:
-        ai_scores = {"title": title_score, "description": desc_score, "highlights": hl_score}
-        ai_feedback = {}
-
-    # Override rule-based scores with AI scores and replace tips
-    for s in scores:
-        if s["category"] == "Title": s["score"] = ai_scores.get("title", s["score"])
-        if s["category"] == "Short Description": s["score"] = ai_scores.get("description", s["score"])
-        if s["category"] == "Highlights": s["score"] = ai_scores.get("highlights", s["score"])
-    tips[:] = [t for t in tips if t["category"] not in ("Title", "Short Description", "Highlights")]
-    for field, label in [("title", "Title"), ("description", "Short Description"), ("highlights", "Highlights")]:
-        if ai_scores.get(field, 100) < 90 and field in ai_feedback:
-            tip_entry = {"category": label, "tip": ai_feedback[field]["tip"], "example": ai_feedback[field]["example"]}
-            # ── Task 6.2: Include per_highlight in Highlights tip when score < 80 ──
-            if field == "highlights" and ai_scores.get("highlights", 100) < 80:
-                per_highlight = ai_feedback[field].get("per_highlight")
-                if per_highlight and isinstance(per_highlight, list):
-                    tip_entry["per_highlight"] = per_highlight
-            tips.insert(0, tip_entry)
-
-    # ── Keywords (Task 5.2: graduated scoring) ─────────────────────────────────
     keywords = (details.get("Description", {}).get("SearchKeywords") or
                 details.get("SearchKeywords") or
                 details.get("Keywords") or [])
-    kw_score = score_keywords(keywords)
-    # tip handled in PLG Discovery section below
-
-    # ── Categories (Task 5.2: Title SEO inline scoring replaced below) ──────
     categories = (details.get("Description", {}).get("Categories") or
                   details.get("Categories") or [])
-    cat_score = 100 if categories else 0
-    if not categories:
-        tips.append({"category": "Categories", "tip": "No categories selected. Choose up to 3 relevant categories."})
-    scores.append({"category": "Categories", "score": cat_score})
 
-    # ── Media (Task 5.2: graduated scoring) ───────────────────────────────────
-    media_score = score_media(details)
-    if media_score < 80:
-        tips.append({"category": "Media / Videos", "tip": "Add demo videos and screenshots. 20% of customers engage with videos on listing pages, and engagement with pricing is 3x higher on listings with rich media.", "example": "✓ Add a 2-3 minute product demo video and at least 3 screenshots showing key features."})
-    scores.append({"category": "Media / Videos", "score": media_score})
-
-    # ── Support (Task 5.2: graduated scoring) ─────────────────────────────────
-    support_score = score_support(details)
-    if support_score < 100:
-        tips.append({"category": "Support", "tip": "Add comprehensive support information including a support URL and email address.", "example": "✓ Include: support description, URL (e.g. https://support.example.com), and email (e.g. support@example.com)."})
-    scores.append({"category": "Support", "score": support_score})
-
-    # ── PLG: Discovery (Task 5.2: graduated scoring) ────────────────────────
-    if kw_score < 100:
-        tips.append({"category": "Search Keywords", "tip": "Add all 3 search keywords using buyer-vocabulary terms — 30% of Marketplace traffic comes from search engines and the majority of clicks go to the first 5 results.", "example": "✓ Good: \"cloud monitoring\", \"infrastructure observability\", \"APM tool\"\n✗ Avoid: your product name or company name (already indexed separately)"})
-    scores.append({"category": "Search Keywords", "score": kw_score})
-
-    # Title SEO (Task 5.2: graduated scoring)
-    title_seo_score = 0
-    if title:
-        word_count = len(title.split())
-        if word_count >= 5:
-            title_seo_score = 100
-        elif word_count >= 3:
-            title_seo_score = 70
+    # ── Title ────────────────────────────────────────────────────────────────
+    title_tier = tier_title(title)
+    scores.append({"category": "Title", "tier": title_tier})
+    if title_tier in ("Needs Attention", "Needs Improvement"):
+        if not title:
+            tips.append({"category": "Title", "tip": "Product title not found.", "example": "✓ Good: \"Splunk Enterprise Security — SIEM & Threat Detection\""})
         else:
-            title_seo_score = 40
-    if title_seo_score < 70:
+            tips.append({"category": "Title", "tip": "Use title case, include your brand name, and add descriptive terms beyond generic words like 'solution' or 'platform'.", "example": "✓ Good: \"Datadog — Cloud Monitoring & Security Platform\"\n✗ Avoid: \"Our Amazing Software v2.0\" or \"datadog monitoring tool\""})
+    elif title_tier == "Good":
+        tips.append({"category": "Title", "tip": "Your title is solid. Add another descriptive term (category, use case) to push to High Standard and improve search ranking.", "example": "✓ Better: \"Datadog — Cloud Monitoring & Security Platform\" instead of \"Datadog Monitoring\""})
+
+    # ── Short Description ────────────────────────────────────────────────────
+    desc_tier = tier_short_description(desc)
+    scores.append({"category": "Short Description", "tier": desc_tier})
+    if desc_tier in ("Needs Attention", "Needs Improvement"):
+        if not desc:
+            tips.append({"category": "Short Description", "tip": "Short description is missing. This is the first thing buyers read on the listing card.", "example": "✓ Good: \"Automatically detect and respond to cloud threats across AWS, Azure, and GCP — no agents required.\""})
+        elif len(desc) > 350:
+            tips.append({"category": "Short Description", "tip": f"Description is {len(desc)} characters. Trim to 350 or less to comply with the guideline.", "example": "✓ Keep it under 350 characters and lead with the problem solved, not your company name."})
+        else:
+            tips.append({"category": "Short Description", "tip": "Lead with the problem you solve or the value delivered, not your company name. Start with an action verb where possible.", "example": "✓ Good: \"Automatically detect and respond to cloud threats across AWS, Azure, and GCP — no agents required.\"\n✗ Avoid: \"We are a leading cybersecurity company offering our award-winning platform.\""})
+    elif desc_tier == "Good":
+        tips.append({"category": "Short Description", "tip": "Add a measurable outcome or metric to push to High Standard.", "example": "✓ Better: \"Cut MTTR by 60% by automatically detecting and responding to cloud threats — no agents required.\""})
+
+    # ── Highlights ───────────────────────────────────────────────────────────
+    hl_tier = tier_highlights(highlights)
+    scores.append({"category": "Highlights", "tier": hl_tier})
+    hl_count = len(highlights) if highlights else 0
+    if hl_tier == "Needs Attention":
+        tips.append({"category": "Highlights", "tip": "No highlights found. Add 3 bullet points — highlights are one of 6 key AWS Marketplace search ranking fields.", "example": "✓ \"Cut infrastructure costs by up to 40% with automated rightsizing\"\n✓ \"Deploy in under 5 minutes with one-click Quick Launch\"\n✓ \"SOC 2 Type II certified — meet compliance requirements out of the box\""})
+    elif hl_tier == "Needs Improvement":
+        if hl_count < 3:
+            tips.append({"category": "Highlights", "tip": f"You have {hl_count} of 3 highlights. Add the remaining ones — highlights are a key search ranking field.", "example": "✓ Each highlight should cover a distinct benefit: cost savings, time savings, or risk reduction with a specific metric."})
+        else:
+            tips.append({"category": "Highlights", "tip": "Replace generic phrases (Easy to use, Scalable, Reliable, Powerful) with specific, benefit-driven claims.", "example": "✓ Good: \"Reduce MTTR by 60% with AI-powered root cause analysis across your entire stack\"\n✗ Avoid: \"Easy to use\" or \"Scalable and reliable solution\""})
+    elif hl_tier == "Good":
+        tips.append({"category": "Highlights", "tip": "Add measurable outcomes (percentages, time saved, cost reduced) to at least one highlight to push to High Standard.", "example": "✓ Better: \"Reduce MTTR by 60% with AI-powered root cause analysis\" instead of \"AI-powered root cause analysis across your stack\""})
+
+    # ── Long Description ─────────────────────────────────────────────────────
+    long_desc_tier = tier_long_description(long_desc)
+    scores.append({"category": "Long Description", "tier": long_desc_tier})
+    if long_desc_tier in ("Needs Attention", "Needs Improvement"):
+        tips.append({"category": "Long Description", "tip": "Expand your long description with use cases, integrations, and outcomes. Customers use generative AI-powered comparisons to evaluate listings, so detail wins.", "example": "✓ Include: key use cases, target personas, integration ecosystem, compliance certifications, and customer outcomes with metrics.\n✓ Structure with clear sections: Overview → Use Cases → Key Features → Why Choose Us"})
+    elif long_desc_tier == "Good":
+        tips.append({"category": "Long Description", "tip": "Add a second structural element (e.g. compliance certifications or integrations) to push to High Standard.", "example": "✓ Mention specific integrations (Slack, ServiceNow, Datadog) and compliance certifications (SOC 2, ISO 27001, HIPAA) where relevant."})
+
+    # ── Categories ────────────────────────────────────────────────────────────
+    cat_tier = tier_categories(categories)
+    scores.append({"category": "Categories", "tier": cat_tier})
+    cat_count = len(categories) if categories else 0
+    if cat_tier == "Needs Attention":
+        tips.append({"category": "Categories", "tip": "No categories selected. Choose up to 3 relevant categories to help buyers discover your listing."})
+    elif cat_tier in ("Needs Improvement", "Good") and cat_count < 3:
+        tips.append({"category": "Categories", "tip": f"You have {cat_count} of 3 categories. Add the remaining ones to maximise discoverability.", "example": "✓ Choose categories aligned with how buyers browse: e.g. Security + Monitoring + Compliance for an observability product."})
+
+    # ── Search Keywords ───────────────────────────────────────────────────────
+    kw_tier = tier_keywords(keywords)
+    scores.append({"category": "Search Keywords", "tier": kw_tier})
+    if kw_tier in ("Needs Attention", "Needs Improvement", "Good"):
+        tips.append({"category": "Search Keywords", "tip": "Use all 3 keywords with buyer-vocabulary terms — 30% of Marketplace traffic comes from search engines and the majority of clicks go to the first 5 results.", "example": "✓ Good: \"cloud monitoring\", \"infrastructure observability\", \"APM tool\"\n✗ Avoid: your product name or company name (already indexed separately)"})
+
+    # ── Media / Videos ────────────────────────────────────────────────────────
+    media_tier = tier_media(details)
+    scores.append({"category": "Media / Videos", "tier": media_tier})
+    if media_tier != "High Standard":
+        tips.append({"category": "Media / Videos", "tip": "Add a demo video and screenshots. 20% of customers engage with videos on listing pages, and listings with rich media see 3x higher pricing engagement.", "example": "✓ Add a 2-3 minute product demo video and at least 3 screenshots showing key features."})
+
+    # ── Support ───────────────────────────────────────────────────────────────
+    support_tier = tier_support(details)
+    scores.append({"category": "Support", "tier": support_tier})
+    if support_tier != "High Standard":
+        tips.append({"category": "Support", "tip": "Provide complete support information including a description, support URL, and email address.", "example": "✓ Include: support description, URL (e.g. https://support.example.com), and email (e.g. support@example.com)."})
+
+    # ── Title SEO ─────────────────────────────────────────────────────────────
+    title_seo_tier = tier_title_seo(title)
+    scores.append({"category": "Title SEO", "tier": title_seo_tier})
+    if title_seo_tier in ("Needs Attention", "Needs Improvement"):
         tips.append({"category": "Title SEO", "tip": "Optimise your title with searchable terms buyers use — title is one of 6 key search ranking fields on AWS Marketplace.", "example": "✓ Good: \"Datadog — Cloud Monitoring & Security Platform\"\n✗ Avoid: \"Datadog\" alone or \"Our Monitoring Tool\""})
-    scores.append({"category": "Title SEO", "score": title_seo_score})
-
-    # ── PLG: Evaluation ───────────────────────────────────────────────────────
-    # ── Reviews — not scored, shown as static recommendation ─────────────────
-    tips.append({"category": "Reviews (G2 / Peerspot)", "tip": "Build your G2 and Peerspot profiles — AWS Marketplace automatically ingests reviews from these platforms. Customers spend 3–6 months researching and browse 3–5 listings before buying.", "example": "✓ Action: Create or claim your product profile at g2.com and peerspot.com, then ask existing customers to leave reviews. AWS Marketplace will automatically display them on your listing."})
-
-    long_desc = (get_nested(details, "Description", "LongDescription") or
-                 get_nested(details, "LongDescription") or "")
-    long_desc_score = score_long_description(long_desc)
-    if long_desc_score < 70:
-        tips.append({"category": "Long Description", "tip": "Expand your long description with specific use cases and features — customers use generative AI-powered comparisons to evaluate listings, so detailed content wins.", "example": "✓ Include: key use cases, target personas, integration ecosystem, compliance certifications, and customer outcomes with metrics.\n✓ Structure with clear sections: Overview → Use Cases → Key Features → Why Choose Us"})
-    scores.append({"category": "Long Description", "score": long_desc_score})
 
     # ── Pricing — fetch from public offer for accurate detection ─────────────
     has_free_trial = False
     has_payg = False
     has_contract = False
     has_scmp = False
+    listing_pricing_model = None
     try:
         offer_resp = mp.list_entities(
             Catalog="AWSMarketplace",
@@ -1628,60 +1673,71 @@ Score against the defined criteria per band. A score of 80+ means the field meet
         has_payg = "externallymetered" in pricing_str
         has_contract = "entitled" in pricing_str
 
-    # ── Pricing (Task 5.2: graduated scoring) ───────────────────────────────
+    # Identify the listing's pricing model so pricing tips are listing-type aware
+    if has_payg and has_contract:
+        listing_pricing_model = "payg_and_contract"
+    elif has_payg:
+        listing_pricing_model = "payg"
+    elif has_contract:
+        listing_pricing_model = "contract"
+    else:
+        listing_pricing_model = "none"
+
+    # ── Free Trial — scored category ─────────────────────────────────────────
+    free_trial_tier = tier_free_trial(has_free_trial)
+    scores.append({"category": "Free Trial", "tier": free_trial_tier})
     if not has_free_trial:
-        tips.append({"category": "Free Trial", "tip": "Add a free trial — 25% of customers say free trials are essential before purchase, and free trial to PAYG conversion is 3x higher than free trial to contract only.", "example": "✓ Set a 14 or 30-day free trial on your listing. Couple it with PAYG pricing for the highest conversion rate."})
-    scores.append({"category": "Free Trial", "score": score_free_trial(has_free_trial, has_payg)})
+        if listing_pricing_model == "contract":
+            trial_tip = "Add a free trial — 25% of buyers consider trials essential before purchase. Free-trial-to-contract conversion is materially higher than direct purchase."
+        else:
+            trial_tip = "Add a free trial — 25% of buyers consider trials essential before purchase, and free trial to PAYG conversion is 3x higher than free trial alone."
+        tips.append({"category": "Free Trial", "tip": trial_tip, "example": "✓ Set a 14 or 30-day free trial on your listing to lower the barrier to evaluation."})
 
-    if not has_payg:
-        tips.append({"category": "Pay-As-You-Go Pricing", "tip": "Add PAYG pricing alongside contracts — coupling free trial with PAYG gives the highest conversion rate.", "example": "✓ Example: Add a per-user/month or per-API-call dimension so buyers can start small and scale up before committing to a contract."})
-    scores.append({"category": "Pay-As-You-Go Pricing", "score": score_payg(has_payg, has_contract)})
+    # ── Pricing strategy — recommendation only, not scored ───────────────────
+    # Pricing model choice is a business decision. We don't penalise PAYG-only
+    # or contract-only listings; we just flag the conversion benefit of adding
+    # the alternative model where it makes sense for the product.
+    if listing_pricing_model == "payg":
+        tips.append({"category": "Pricing Strategy", "tip": "Your listing offers PAYG pricing. Consider adding contract pricing tiers for enterprise buyers who prefer committed spend with volume discounts.", "example": "✓ Offer annual contract tiers (Starter / Pro / Enterprise) alongside your PAYG dimensions to capture both self-serve and enterprise segments."})
+    elif listing_pricing_model == "contract":
+        tips.append({"category": "Pricing Strategy", "tip": "Your listing offers contract pricing. Consider adding PAYG so buyers can start small and scale before committing — coupling free trial with PAYG gives the highest conversion rate.", "example": "✓ Add a per-user/month or per-API-call dimension so buyers can evaluate before committing to a contract."})
+    elif listing_pricing_model == "none":
+        tips.append({"category": "Pricing Strategy", "tip": "No pricing terms detected on your public offer. Configure either PAYG or contract pricing (or both) so buyers can subscribe.", "example": "✓ Set up at least one pricing dimension. PAYG works well for self-serve products; contract pricing fits enterprise sales motions."})
 
-    if not has_contract:
-        tips.append({"category": "Contract Pricing", "tip": "Consider contract pricing for enterprise buyers — transition customers from PAYG to contract as relationships develop.", "example": "✓ Offer annual contract tiers (e.g. Starter / Pro / Enterprise) with volume discounts to incentivise commitment."})
-    scores.append({"category": "Contract Pricing", "score": score_contract(has_contract)})
+    # ── Static recommendations not scored ────────────────────────────────────
+    # Reviews — depends on third-party platforms, not directly controllable
+    tips.append({"category": "Reviews (G2 / Peerspot)", "tip": "Build your G2 and Peerspot profiles — AWS Marketplace automatically ingests reviews from these platforms. Customers spend 3-6 months researching and browse 3-5 listings before buying.", "example": "✓ Action: Create or claim your product profile at g2.com and peerspot.com, then ask existing customers to leave reviews. AWS Marketplace will automatically display them on your listing."})
 
-    # ── PLG: Procurement ──────────────────────────────────────────────────────
-    # ── Vendor Insights — not scored, shown as static recommendation ──────────
-    tips.append({"category": "Vendor Insights", "tip": "Enable Vendor Insights — security reviews delay procurement by 8–10 weeks. Vendor Insights gives buyers a dashboard of 125 security and compliance controls to speed up their review.", "example": "✓ Action: Go to Partner Central → your listing → Vendor Insights and connect your AWS account. Supports SOC 2, ISO 27001, PCI DSS, FedRAMP, HIPAA, GDPR evidence."})
+    # Vendor Insights — security review acceleration
+    tips.append({"category": "Vendor Insights", "tip": "Enable Vendor Insights — security reviews delay procurement by 8-10 weeks. Vendor Insights gives buyers a dashboard of 125 security and compliance controls to speed up their review.", "example": "✓ Action: Go to Partner Central → your listing → Vendor Insights and connect your AWS account. Supports SOC 2, ISO 27001, PCI DSS, FedRAMP, HIPAA, GDPR evidence."})
 
-    # ── SCMP — static recommendation only, not scored ────────────────────────
+    # SCMP — contract acceleration
     if not has_scmp:
         tips.append({"category": "Standard Contract (SCMP)", "tip": "Consider using the Standard Contract for AWS Marketplace (SCMP) instead of a custom EULA — it can accelerate sales cycles by up to 80% by removing the need for buyers to involve their legal team.", "example": "✓ Action: Select SCMP when configuring your listing's contract terms. Optional addendum templates are available for enhanced security and regulatory compliance."})
 
-    # ── Task 5.5: Add score band labels and weights to each score entry ─────
-    for s in scores:
-        cat = s["category"]
-        s["weight"] = CATEGORY_WEIGHTS.get(cat, 1)
-        # Map category names to rubric field keys for band lookup
-        field_map = {"Title": "title", "Short Description": "short_description", "Highlights": "highlights"}
-        field_key = field_map.get(cat)
-        s["band"] = get_band_label(field_key, s["score"]) if field_key else None
+    # ── Compute overall tier ─────────────────────────────────────────────────
+    overall = overall_tier_from_categories(scores)
 
-    # ── Task 5.6: Weighted average for overall score ─────────────────────────
-    total_weighted = sum(s["score"] * CATEGORY_WEIGHTS.get(s["category"], 1) for s in scores)
-    total_weights = sum(CATEGORY_WEIGHTS.get(s["category"], 1) for s in scores)
-    overall = round(total_weighted / total_weights) if total_weights > 0 else 0
+    # ── Sort tips by tier severity (worst first), then by category order ─────
+    tier_severity = {t: i for i, t in enumerate(SCORING_TIERS)}
+    score_tier_map = {s["category"]: s["tier"] for s in scores}
+    tips.sort(key=lambda t: tier_severity.get(score_tier_map.get(t["category"], "High Standard"), 99))
 
-    # Sort tips by score ascending (worst first)
-    score_map = {s["category"]: s["score"] for s in scores}
-    tips.sort(key=lambda t: score_map.get(t["category"], 50))
-
-    # ── AI executive summary (Task 5.3: include product context) ──────────────
+    # ── AI executive summary ─────────────────────────────────────────────────
     summary = ""
     try:
         bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
-        score_summary = "\n".join(f"- {s['category']}: {s['score']}%" for s in scores)
+        score_summary = "\n".join(f"- {s['category']}: {s['tier']}" for s in scores)
         tip_summary = "\n".join(f"- {t['category']}: {t['tip']}" for t in tips[:6])
-        summary_prompt = f"""You are an AWS Marketplace listing advisor. Write a 3-4 sentence executive summary for a seller based on their listing effectiveness scores, benchmarked against official AWS Marketplace guidelines and PLG best practices.
+        summary_prompt = f"""You are an AWS Marketplace listing advisor. Write a 3-4 sentence executive summary for a seller based on their listing effectiveness assessment, benchmarked against official AWS Marketplace guidelines and PLG best practices.
 
 {guidelines_text}
 
 Product context: {product_context["summary"]}
 
-Overall score: {overall}% — {"Optimised" if overall >= 85 else "Good" if overall >= 70 else "Needs Work" if overall >= 50 else "Needs Attention"}
+Overall tier: {overall}
 
-Category scores:
+Category tiers:
 {score_summary}
 
 Top recommendations:
@@ -1692,7 +1748,7 @@ Write a concise, actionable summary that:
 2. Identifies the 2-3 highest priority areas to fix, referencing specific guidelines where relevant
 3. Ends with one specific next action they should take today
 
-Be direct and specific. Do not use bullet points. Do not mention AWS Marketplace by name repeatedly. Tailor advice to this product's domain ({product_context["industry"]})."""
+Tiers run from 'Needs Attention' (worst) to 'Needs Improvement', 'Good', and 'High Standard' (best). Be direct and specific. Do not use bullet points. Do not mention numerical scores or percentages. Do not mention AWS Marketplace by name repeatedly. Tailor advice to this product's domain ({product_context["industry"]})."""
 
         resp = bedrock.invoke_model(
             modelId="anthropic.claude-3-haiku-20240307-v1:0",
@@ -1711,7 +1767,7 @@ Be direct and specific. Do not use bullet points. Do not mention AWS Marketplace
 
     return {
         "pass": True,
-        "overall_score": overall,
+        "overall_tier": overall,
         "summary": summary,
         "product_context": product_context,
         "scores": scores,
@@ -1721,6 +1777,8 @@ Be direct and specific. Do not use bullet points. Do not mention AWS Marketplace
         "long_description": long_desc,
         "highlights": highlights,
         "keywords": keywords,
+        "listing_pricing_model": listing_pricing_model,
+        "has_free_trial": has_free_trial,
         "debug_keys": top_keys,
     }
 

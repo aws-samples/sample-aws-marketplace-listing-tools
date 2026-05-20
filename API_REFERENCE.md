@@ -119,19 +119,19 @@ This document describes every AWS API call made by the tool, grouped by feature.
 | Detail | Value |
 |--------|-------|
 | Call | `describe_entity(Catalog="AWSMarketplace", EntityId=entity_id)` |
-| Purpose | Retrieves full listing details for scoring |
+| Purpose | Retrieves full listing details for the tier assessment |
 | IAM permission | `aws-marketplace:DescribeEntity` |
 
 ---
 
-### AI Quality Scoring
-**Service:** `bedrock-runtime` (us-east-1)
+### Tier Assessment
+**Service:** None — runs locally in Lambda
 | Detail | Value |
 |--------|-------|
-| Call | `invoke_model(modelId="anthropic.claude-3-haiku-20240307-v1:0")` |
-| Purpose | Scores title, short description, and highlights 0-100 against a structured rubric |
-| IAM permission | `bedrock:InvokeModel` |
-| Fallback | Rule-based scoring if Bedrock call fails |
+| Logic | Deterministic checks against AWS Marketplace listing guidelines and PLG best practices |
+| Output | Each scored category receives one of four tiers: Needs Attention, Needs Improvement, Good, High Standard |
+| Categories | Title, Short Description, Highlights, Long Description, Categories, Search Keywords, Media / Videos, Support, Free Trial, Title SEO |
+| Overall tier | Derived from per-category tiers (worst-weighted, see `overall_tier_from_categories` in handler.py) |
 
 ---
 
@@ -140,8 +140,9 @@ This document describes every AWS API call made by the tool, grouped by feature.
 | Detail | Value |
 |--------|-------|
 | Call | `invoke_model(modelId="anthropic.claude-3-haiku-20240307-v1:0")` |
-| Purpose | Generates a prioritised action summary based on all category scores |
+| Purpose | Generates a prioritised action summary based on the tier assessment |
 | IAM permission | `bedrock:InvokeModel` |
+| Fallback | Empty summary if Bedrock call fails (the assessment itself still returns) |
 
 ---
 

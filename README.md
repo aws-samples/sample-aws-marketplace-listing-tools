@@ -4,16 +4,16 @@
 
 > This is sample code provided for demonstration and educational purposes. It is not a supported AWS product.
 
-A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and score listing effectiveness. Deploys into the seller's own AWS account via AWS SAM.
+A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and assess listing effectiveness. Deploys into the seller's own AWS account via AWS SAM.
 
 ## Problem
 
 Publishing a SaaS product on AWS Marketplace requires a registration page that integrates with the Marketplace APIs (ResolveCustomer, GetEntitlements, BatchMeterUsage). These integrations are reviewed by Marketplace Operations before your listing can go public. Integration issues discovered during review require resubmission, which can delay your listing going live.
 
-This toolkit gives you instant feedback on your integrations so you can find and fix issues before you submit for review. It also scores your listing content against product-led growth (PLG) best practices, helping you improve discoverability and conversion from day one.
+This toolkit gives you instant feedback on your integrations so you can find and fix issues before you submit for review. It also assesses your listing content against product-led growth (PLG) best practices, helping you improve discoverability and conversion from day one.
 
 - **Integration Tests** — validate your registration page and API integrations against your live Limited listing
-- **Listing Effectiveness Scorer** — AI-powered scoring across 12 categories with actionable recommendations to improve search ranking and buyer experience
+- **Listing Effectiveness Scorer** — tiered assessment across 10 categories with actionable recommendations to improve search ranking and buyer experience
 
 ## Features
 
@@ -21,15 +21,16 @@ This toolkit gives you instant feedback on your integrations so you can find and
 Run automated checks against your live Limited listing before submitting for MCO review. The toolkit validates your registration page, token exchange, CloudTrail history, error handling, EventBridge configuration, and Concurrent Agreements. Where it can't test directly (GetEntitlements, BatchMeterUsage), it provides code examples and checks CloudTrail to confirm your backend is making the right calls.
 
 ### Listing Effectiveness Scorer
-Get an AI-generated score for your listing across 12 weighted categories, with specific recommendations to improve discoverability and conversion:
-- **Content** — Title, Short Description, Highlights scored on a 4-band scale (Needs Attention → Optimised)
+Get a tiered assessment of your listing across 10 categories, with specific recommendations to improve discoverability and conversion:
+- **Content** — Title, Short Description, Highlights, Long Description
 - **Discoverability** — Search Keywords, Title SEO, Categories
 - **Media** — Screenshots and video presence
-- **Pricing & Trials** — Free Trial, Pay-As-You-Go, Contract options
+- **Trial** — Free Trial availability
 - **Support** — Contact information completeness
-- Per-highlight feedback, product-aware evaluation, and AI-generated rewrites you can copy straight into your listing
 
-> **Note:** Scores are AI-generated guidance for improving listing discoverability and conversion. Recommendations are based on AWS Marketplace listing guidelines and PLG best practices. AI-generated rewrites (powered by Amazon Bedrock) should be reviewed before use.
+Each category is rated on a 4-tier scale: **Needs Attention**, **Needs Improvement**, **Good**, **High Standard**. The overall listing tier is derived from the per-category tiers, weighted toward the worst categories so a single weak field doesn't drag down a strong listing but multiple gaps still flag clearly. Pricing strategy, reviews (G2/Peerspot), Vendor Insights, and Standard Contract (SCMP) appear as separate recommendations rather than scored categories, since these are business decisions or rely on third-party platforms.
+
+> **Note:** Tier assessments are derived from deterministic checks against AWS Marketplace listing guidelines and PLG best practices. AI-generated rewrites and the executive summary (powered by Amazon Bedrock) are provided as guidance and should be reviewed before use.
 
 ## Architecture
 
@@ -102,7 +103,7 @@ This tool deploys into the seller's AWS account. With typical usage (a few test 
 | Amazon Bedrock (Claude 3 Haiku) | ~2-3 calls per scoring run (input ~2K tokens, output ~1K tokens) | ~$0.01 per scoring run |
 | AWS CloudTrail | LookupEvents API calls (read-only) | Free (included with default trail) |
 
-Estimated total: under $1/month for typical development usage. The primary variable cost is Bedrock — each listing score uses 2-3 Haiku invocations. Delete the stack when not in use to avoid any ongoing charges.
+Estimated total: under $1/month for typical development usage. The primary variable cost is Bedrock — each listing assessment uses 1 Haiku invocation for the executive summary, plus optional invocations for AI-generated rewrites. Delete the stack when not in use to avoid any ongoing charges.
 
 ## Security
 
