@@ -6,6 +6,10 @@
 
 A self-service tool for AWS Marketplace SaaS sellers to validate listing integrations and assess listing effectiveness. Deploys into the seller's own AWS account via AWS SAM.
 
+## Supported listing types
+
+This toolkit currently supports **SaaS listings only**. AMI, Container, and Professional Services listings use different integration patterns, pricing models, and listing fields, so the integration tests and effectiveness scorer would produce misleading results for them. Both tabs return a clear error if you point them at a non-SaaS listing. Support for additional listing types may be added based on demand.
+
 ## Problem
 
 Publishing a SaaS product on AWS Marketplace requires a registration page that integrates with the Marketplace APIs (ResolveCustomer, GetEntitlements, BatchMeterUsage). These integrations are reviewed by Marketplace Operations before your listing can go public. Integration issues discovered during review require resubmission, which can delay your listing going live.

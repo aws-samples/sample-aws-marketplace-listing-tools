@@ -1326,7 +1326,7 @@ def detect_listing_type(body):
                     break
 
         if not entity_id:
-            return {"pass": False, "error": "Could not find a listing matching this product code in your account."}
+            return {"pass": False, "error": "Could not find a SaaS listing matching this product code in your account. The Integration Tests tab supports SaaS listings only — AMI, Container, and Professional Services listings use different integration patterns."}
 
         detail_resp = mp.describe_entity(Catalog="AWSMarketplace", EntityId=entity_id)
         raw = detail_resp.get("Details", "{}")
@@ -1502,6 +1502,36 @@ def score_listing(body):
 
     mp = boto3.client("marketplace-catalog", region_name="us-east-1")
     resp = mp.describe_entity(Catalog="AWSMarketplace", EntityId=entity_id)
+
+    # ── Listing type guard ───────────────────────────────────────────────────
+    # The scorer is currently calibrated for SaaS listings only. Pricing
+    # detection, recommendations, and PLG benchmarks assume SaaS-shaped term
+    # types (UsageBased, ConfigurableUpfront, FixedUpfront, FreeTrial).
+    # AMI, Container, and Professional Services listings use different term
+    # types and listing fields, so running the scorer against them produces
+    # misleading results. Reject non-SaaS listings with a clear message.
+    entity_type_raw = resp.get("EntityType", "") or ""
+    # EntityType is returned in the format "EntityType@Version" (e.g. "SaaSProduct@1.0")
+    entity_type = entity_type_raw.split("@", 1)[0] if entity_type_raw else ""
+    if entity_type and entity_type != "SaaSProduct":
+        friendly_names = {
+            "AmiProduct": "AMI",
+            "ContainerProduct": "Container",
+            "ProfessionalServicesProduct": "Professional Services",
+            "DataProduct": "Data",
+        }
+        type_label = friendly_names.get(entity_type, entity_type)
+        return {
+            "pass": False,
+            "error": (
+                f"This is a {type_label} listing. The Listing Effectiveness Scorer currently "
+                f"supports SaaS listings only. {type_label} listings use different pricing "
+                f"models and listing fields, so the assessment would not produce reliable "
+                f"results."
+            ),
+            "entity_type": entity_type,
+        }
+
     raw = resp.get("Details", "{}")
     details = json.loads(raw) if isinstance(raw, str) else raw
 
